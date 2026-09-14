@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>0e8d4021-9e98-4773-b3b1-18552611e795</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.2" />
+    <!-- Pinned above the transitive 2.0.0 pulled in by Microsoft.AspNetCore.OpenApi 10.0.2, which has a known high-severity vulnerability (GHSA-v5pm-xwqc-g5wc). -->
+    <PackageReference Include="Microsoft.OpenApi" Version="2.12.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CashTrack.Application\CashTrack.Application.csproj" />
+    <ProjectReference Include="..\CashTrack.Infrastructure\CashTrack.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

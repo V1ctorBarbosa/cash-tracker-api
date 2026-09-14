@@ -1,0 +1,38 @@
+# .NET
+api/**/bin/
+api/**/obj/
+*.user
+
+# Secrets / credentials — never commit Firebase service account keys or env files
+**/firebase-service-account*.json
+**/*.serviceaccount.json
+.env
+.env.*
+!.env.example
+
+# Postman environments hold API keys once filled in via the Postman UI — the collection
+# itself (endpoints, no secrets) is fine to commit; environments are not.
+**/*.postman_environment.json
+
+# Terraform — state lives in Terraform Cloud, never locally; these are local-only working files.
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+crash.log
+crash.*.log
+
+# app/ is its own independent git repository (cash-tracker-app on GitHub), nested here only
+# for local convenience -- this repo must never track or touch its contents.
+/app/
+
+*.log
+npm-debug.*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vs/
+.vscode/
+.idea/

@@ -1,0 +1,104 @@
+{
+  "info": {
+    "name": "Cash Track API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:5291" },
+    { "key": "idToken", "value": "" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{idToken}}", "type": "string" }]
+  },
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Get health",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/health"
+          }
+        },
+        {
+          "name": "Get Firebase health",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/health/firebase"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Profile",
+      "item": [
+        {
+          "name": "Get profile",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/profile"
+          }
+        },
+        {
+          "name": "Upsert profile",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/profile",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Victor\",\n  \"email\": \"vicfer2708@gmail.com\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Tags",
+      "item": [
+        {
+          "name": "List tags",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/tags"
+          }
+        },
+        {
+          "name": "Create tag",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/tags",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Mercado\",\n  \"color\": \"#3B82F6\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Update tag",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/tags/:id",
+            "variable": [{ "key": "id", "value": "" }],
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Supermercado\",\n  \"color\": \"#EF4444\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Delete tag",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/tags/:id",
+            "variable": [{ "key": "id", "value": "" }]
+          }
+        }
+      ]
+    }
+  ]
+}

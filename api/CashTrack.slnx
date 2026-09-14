@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/CashTrack.Api/CashTrack.Api.csproj" />
+    <Project Path="src/CashTrack.Application/CashTrack.Application.csproj" />
+    <Project Path="src/CashTrack.Domain/CashTrack.Domain.csproj" />
+    <Project Path="src/CashTrack.Infrastructure/CashTrack.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/test/">
+    <Project Path="test/CashTrack.Tests/CashTrack.Tests.csproj" />
+  </Folder>
+</Solution>
