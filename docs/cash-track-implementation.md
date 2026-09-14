@@ -816,9 +816,9 @@ Firebase Auth            Firestore
 
 ---
 
-# 27. Open decisions to confirm
+# 27. Confirmed decisions
 
-Two calls were made in this document without an explicit answer from you — flagging them here so you can confirm or override before implementation starts:
+Two calls made in this document were reviewed and confirmed as-is:
 
-1. **`PaymentMethod` as a fixed enum (Section 8)**, not a user-managed entity like `Tag`. If you actually want to track specific cards/accounts (e.g. "Nubank Crédito" separately from "Itaú Crédito"), this should become an entity now instead of a future feature.
-2. **`Transaction` as one entity with a `type` discriminator (Section 9)**, instead of separate `Income`/`Expense` entities. Given both share every field and query shape, this keeps the domain smaller — but it's worth confirming before the domain layer is built, since changing it later touches every layer.
+1. **`PaymentMethod` stays a fixed enum (Section 8)**, not a user-managed entity — confirmed: no bank/institution tracking needed, just the payment method itself (Pix, cash, debit, credit, etc.).
+2. **`Transaction` stays one entity with a `type` discriminator (Section 9)** (`Income` or `Expense`), instead of separate entities. This is exactly the behavior wanted: every month starts empty, income is logged as it comes in (it varies — salary, personal loans returned, etc.), and every movement says whether it's money coming in or going out.
