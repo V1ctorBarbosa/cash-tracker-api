@@ -34,9 +34,9 @@ public sealed class DashboardServiceTest
         var materializationService = new RecurringTransactionMaterializationService(_recurringTransactionRepository, _transactionRepository);
 
         _tagRepository.ListByUserAsync(_userId, Arg.Any<CancellationToken>()).Returns([
-            Tag.Create(_moradiaTagId, _userId, "Moradia", new TagColor("#000000")),
-            Tag.Create(_mercadoTagId, _userId, "Mercado", new TagColor("#000000")),
-            Tag.Create(_lazerTagId, _userId, "Lazer", new TagColor("#000000")),
+            Tag.Create(_moradiaTagId, _userId, "Moradia", new TagColor("#000000"), TransactionType.Expense),
+            Tag.Create(_mercadoTagId, _userId, "Mercado", new TagColor("#000000"), TransactionType.Expense),
+            Tag.Create(_lazerTagId, _userId, "Lazer", new TagColor("#000000"), TransactionType.Expense),
         ]);
         _budgetRepository.ListByUserAsync(_userId, null, Arg.Any<CancellationToken>()).Returns([]);
         _transactionRepository

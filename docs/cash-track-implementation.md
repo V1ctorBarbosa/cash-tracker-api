@@ -209,7 +209,7 @@ There is no stored "monthly salary" field on `User` — income is logged as a `T
 
 # 7. Tag
 
-Represents a category the user assigns to a transaction, for grouping and analysis. Used on both income and expense transactions — e.g. `Salário` and `Freelance` on income, `Mercado` and `Lazer` on expense.
+Represents a category the user assigns to a transaction, for grouping and analysis. A tag is scoped to one kind — `Salário` and `Freelance` are income tags, `Mercado` and `Lazer` are expense tags — so a tag never shows up as a choice for the other kind of transaction (added after design review of the tag-management screens).
 
 Conceptual fields:
 
@@ -220,9 +220,14 @@ id
 userId
 name
 color
+kind
 ```
 
-`color` exists purely for chart legends (Section 20) — each tag gets a consistent color across every chart it appears in.
+```text
+kind: Income | Expense
+```
+
+`color` exists purely for chart legends (Section 20) — each tag gets a consistent color across every chart it appears in. `kind` reuses the same `Income | Expense` set as `Transaction.type` (Section 9).
 
 Example set of tags (user-defined, not seeded by the system): `Salário`, `Freelance`, `Mercado`, `Moradia`, `Transporte`, `Lazer`, `Saúde`, `Assinaturas`, `Poupança`, `Outros`.
 

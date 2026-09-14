@@ -1,4 +1,5 @@
 using CashTrack.Domain.Tags;
+using CashTrack.Domain.Transactions;
 using CashTrack.Domain.Users;
 
 namespace CashTrack.Application.Tags;
@@ -20,7 +21,12 @@ public sealed class TagService
 
     public async Task<TagDto> CreateAsync(UserId userId, CreateTagRequest request, CancellationToken cancellationToken = default)
     {
-        var tag = Tag.Create(new TagId(Guid.NewGuid().ToString()), userId, request.Name, new TagColor(request.Color));
+        var tag = Tag.Create(
+            new TagId(Guid.NewGuid().ToString()),
+            userId,
+            request.Name,
+            new TagColor(request.Color),
+            Enum.Parse<TransactionType>(request.Kind, ignoreCase: true));
 
         await _tagRepository.SaveAsync(tag, cancellationToken);
         return ToDto(tag);
@@ -38,7 +44,12 @@ public sealed class TagService
             return null;
         }
 
-        var updatedTag = Tag.Create(tagId, userId, request.Name, new TagColor(request.Color));
+        var updatedTag = Tag.Create(
+            tagId,
+            userId,
+            request.Name,
+            new TagColor(request.Color),
+            Enum.Parse<TransactionType>(request.Kind, ignoreCase: true));
 
         await _tagRepository.SaveAsync(updatedTag, cancellationToken);
         return ToDto(updatedTag);
@@ -56,5 +67,5 @@ public sealed class TagService
         return true;
     }
 
-    private static TagDto ToDto(Tag tag) => new(tag.Id.Value, tag.Name, tag.Color.Value);
+    private static TagDto ToDto(Tag tag) => new(tag.Id.Value, tag.Name, tag.Color.Value, tag.Kind.ToString());
 }

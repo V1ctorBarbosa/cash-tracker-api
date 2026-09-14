@@ -1,4 +1,5 @@
 using CashTrack.Domain.Tags;
+using CashTrack.Domain.Transactions;
 using CashTrack.Domain.Users;
 using FluentAssertions;
 
@@ -15,13 +16,14 @@ public sealed class TagTest
         var color = new TagColor("#3B82F6");
 
         // Act
-        var tag = Tag.Create(id, userId, "Mercado", color);
+        var tag = Tag.Create(id, userId, "Mercado", color, TransactionType.Expense);
 
         // Assert
         tag.Id.Should().Be(id);
         tag.UserId.Should().Be(userId);
         tag.Name.Should().Be("Mercado");
         tag.Color.Should().Be(color);
+        tag.Kind.Should().Be(TransactionType.Expense);
     }
 
     [Fact]
@@ -50,5 +52,6 @@ public sealed class TagTest
         new TagId("tag-mercado"),
         new UserId("firebase-uid-123"),
         name,
-        new TagColor("#3B82F6"));
+        new TagColor("#3B82F6"),
+        TransactionType.Expense);
 }

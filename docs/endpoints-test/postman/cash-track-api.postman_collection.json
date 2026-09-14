@@ -73,7 +73,7 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Mercado\",\n  \"color\": \"#3B82F6\"\n}"
+              "raw": "{\n  \"name\": \"Mercado\",\n  \"color\": \"#3B82F6\",\n  \"kind\": \"Expense\"\n}"
             }
           }
         },
@@ -86,7 +86,7 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Supermercado\",\n  \"color\": \"#EF4444\"\n}"
+              "raw": "{\n  \"name\": \"Supermercado\",\n  \"color\": \"#EF4444\",\n  \"kind\": \"Expense\"\n}"
             }
           }
         },

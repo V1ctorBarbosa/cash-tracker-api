@@ -1,4 +1,5 @@
 using CashTrack.Domain.Tags;
+using CashTrack.Domain.Transactions;
 using CashTrack.Domain.Users;
 
 namespace CashTrack.Infrastructure.Tags;
@@ -13,12 +14,14 @@ internal static class TagDocumentMapper
         id,
         new UserId(document.UserId),
         document.Name,
-        new TagColor(document.Color));
+        new TagColor(document.Color),
+        Enum.Parse<TransactionType>(document.Kind));
 
     public static TagDocument ToDocument(Tag tag) => new()
     {
         UserId = tag.UserId.Value,
         Name = tag.Name,
         Color = tag.Color.Value,
+        Kind = tag.Kind.ToString(),
     };
 }

@@ -13,4 +13,7 @@ internal sealed class TagDocument
 
     [FirestoreProperty]
     public string Color { get; set; } = string.Empty;
+
+    [FirestoreProperty]
+    public string Kind { get; set; } = string.Empty;
 }
