@@ -1,4 +1,5 @@
 using CashTrack.Application.Budgets;
+using CashTrack.Application.Dashboard;
 using CashTrack.Application.RecurringTransactions;
 using CashTrack.Application.Tags;
 using CashTrack.Application.Transactions;
@@ -17,6 +18,7 @@ public static class DependencyInjection
         services.AddScoped<RecurringTransactionService>();
         services.AddScoped<RecurringTransactionMaterializationService>();
         services.AddScoped<BudgetService>();
+        services.AddScoped<DashboardService>();
 
         return services;
     }

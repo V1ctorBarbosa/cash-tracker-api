@@ -67,5 +67,6 @@ app.MapTagEndpoints();
 app.MapTransactionEndpoints();
 app.MapRecurringTransactionEndpoints();
 app.MapBudgetEndpoints();
+app.MapDashboardEndpoints();
 
 app.Run();

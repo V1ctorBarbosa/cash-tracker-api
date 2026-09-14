@@ -6,9 +6,10 @@ namespace CashTrack.Domain.Common;
 /// A calendar month, independent of any specific day -- the granularity Budgets and recurring
 /// transaction generation operate at (Sections 12-13 of the implementation document).
 /// </summary>
-public readonly record struct YearMonth
+public readonly record struct YearMonth : IComparable<YearMonth>
 {
     private const string Format = "yyyy-MM";
+    private const int MonthsPerYear = 12;
 
     public int Year { get; }
 
@@ -36,6 +37,33 @@ public readonly record struct YearMonth
 
         return FromDate(parsed);
     }
+
+    /// <summary>Every month from <paramref name="from"/> to <paramref name="to"/>, inclusive on both ends.</summary>
+    public static IEnumerable<YearMonth> EnumerateRange(YearMonth from, YearMonth to)
+    {
+        var current = from;
+        while (current <= to)
+        {
+            yield return current;
+            current = current.AddMonths(1);
+        }
+    }
+
+    public YearMonth AddMonths(int months)
+    {
+        var totalMonths = (Year * MonthsPerYear) + (Month - 1) + months;
+        return new YearMonth(totalMonths / MonthsPerYear, (totalMonths % MonthsPerYear) + 1);
+    }
+
+    public int CompareTo(YearMonth other) => (Year, Month).CompareTo((other.Year, other.Month));
+
+    public static bool operator <(YearMonth left, YearMonth right) => left.CompareTo(right) < 0;
+
+    public static bool operator >(YearMonth left, YearMonth right) => left.CompareTo(right) > 0;
+
+    public static bool operator <=(YearMonth left, YearMonth right) => left.CompareTo(right) <= 0;
+
+    public static bool operator >=(YearMonth left, YearMonth right) => left.CompareTo(right) >= 0;
 
     public override string ToString() => $"{Year:D4}-{Month:D2}";
 }

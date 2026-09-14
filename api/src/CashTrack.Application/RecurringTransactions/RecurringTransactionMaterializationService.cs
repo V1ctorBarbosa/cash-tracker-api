@@ -33,7 +33,7 @@ public sealed class RecurringTransactionMaterializationService
             return;
         }
 
-        foreach (var month in EnumerateMonths(from, to))
+        foreach (var month in YearMonth.EnumerateRange(YearMonth.FromDate(from), YearMonth.FromDate(to)))
         {
             foreach (var recurringTransaction in recurringTransactions)
             {
@@ -66,18 +66,6 @@ public sealed class RecurringTransactionMaterializationService
 
                 await _transactionRepository.SaveAsync(transaction, cancellationToken);
             }
-        }
-    }
-
-    private static IEnumerable<YearMonth> EnumerateMonths(DateOnly from, DateOnly to)
-    {
-        var current = YearMonth.FromDate(from);
-        var last = YearMonth.FromDate(to);
-
-        while (current.Year < last.Year || (current.Year == last.Year && current.Month <= last.Month))
-        {
-            yield return current;
-            current = current.Month == 12 ? new YearMonth(current.Year + 1, 1) : new YearMonth(current.Year, current.Month + 1);
         }
     }
 }
