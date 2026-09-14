@@ -64,5 +64,6 @@ app.MapGet("/health/firebase", async (FirestoreDb firestoreDb) =>
 
 app.MapProfileEndpoints();
 app.MapTagEndpoints();
+app.MapTransactionEndpoints();
 
 app.Run();

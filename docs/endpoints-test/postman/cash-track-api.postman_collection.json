@@ -99,6 +99,70 @@
           }
         }
       ]
+    },
+    {
+      "name": "Transactions",
+      "item": [
+        {
+          "name": "List transactions",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/transactions?from=2026-09-01&to=2026-09-30&tagId=&type=&paymentMethod=",
+              "host": ["{{baseUrl}}"],
+              "path": ["transactions"],
+              "query": [
+                { "key": "from", "value": "2026-09-01" },
+                { "key": "to", "value": "2026-09-30" },
+                { "key": "tagId", "value": "", "disabled": true },
+                { "key": "type", "value": "", "disabled": true },
+                { "key": "paymentMethod", "value": "", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get transaction",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/transactions/:id",
+            "variable": [{ "key": "id", "value": "" }]
+          }
+        },
+        {
+          "name": "Create transaction",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/transactions",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"Expense\",\n  \"amount\": 89.90,\n  \"date\": \"2026-09-10\",\n  \"description\": \"Supermercado\",\n  \"tagId\": \"\",\n  \"paymentMethod\": \"CartaoDebito\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Update transaction",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/transactions/:id",
+            "variable": [{ "key": "id", "value": "" }],
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"Expense\",\n  \"amount\": 95.00,\n  \"date\": \"2026-09-10\",\n  \"description\": \"Supermercado\",\n  \"tagId\": \"\",\n  \"paymentMethod\": \"Pix\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Delete transaction",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/transactions/:id",
+            "variable": [{ "key": "id", "value": "" }]
+          }
+        }
+      ]
     }
   ]
 }

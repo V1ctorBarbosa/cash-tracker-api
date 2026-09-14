@@ -1,4 +1,5 @@
 using CashTrack.Application.Tags;
+using CashTrack.Application.Transactions;
 using CashTrack.Application.Users;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -10,6 +11,7 @@ public static class DependencyInjection
     {
         services.AddScoped<UserProfileService>();
         services.AddScoped<TagService>();
+        services.AddScoped<TransactionService>();
 
         return services;
     }

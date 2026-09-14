@@ -1,7 +1,9 @@
 using CashTrack.Application.Tags;
+using CashTrack.Application.Transactions;
 using CashTrack.Application.Users;
 using CashTrack.Infrastructure.Firebase;
 using CashTrack.Infrastructure.Tags;
+using CashTrack.Infrastructure.Transactions;
 using CashTrack.Infrastructure.Users;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -15,6 +17,7 @@ public static class DependencyInjection
         services.AddFirebaseAdmin(configuration);
         services.AddScoped<IUserRepository, FirestoreUserRepository>();
         services.AddScoped<ITagRepository, FirestoreTagRepository>();
+        services.AddScoped<ITransactionRepository, FirestoreTransactionRepository>();
 
         return services;
     }
