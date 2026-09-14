@@ -1,7 +1,11 @@
+using CashTrack.Application.Budgets;
+using CashTrack.Application.RecurringTransactions;
 using CashTrack.Application.Tags;
 using CashTrack.Application.Transactions;
 using CashTrack.Application.Users;
+using CashTrack.Infrastructure.Budgets;
 using CashTrack.Infrastructure.Firebase;
+using CashTrack.Infrastructure.RecurringTransactions;
 using CashTrack.Infrastructure.Tags;
 using CashTrack.Infrastructure.Transactions;
 using CashTrack.Infrastructure.Users;
@@ -18,6 +22,8 @@ public static class DependencyInjection
         services.AddScoped<IUserRepository, FirestoreUserRepository>();
         services.AddScoped<ITagRepository, FirestoreTagRepository>();
         services.AddScoped<ITransactionRepository, FirestoreTransactionRepository>();
+        services.AddScoped<IRecurringTransactionRepository, FirestoreRecurringTransactionRepository>();
+        services.AddScoped<IBudgetRepository, FirestoreBudgetRepository>();
 
         return services;
     }

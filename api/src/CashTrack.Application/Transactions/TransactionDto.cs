@@ -8,4 +8,5 @@ public sealed record TransactionDto(
     string Description,
     string TagId,
     string PaymentMethod,
+    string? RecurringTransactionId,
     DateTimeOffset CreatedAt);

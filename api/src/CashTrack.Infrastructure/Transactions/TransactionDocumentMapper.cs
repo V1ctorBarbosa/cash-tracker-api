@@ -1,5 +1,6 @@
 using System.Globalization;
 using CashTrack.Domain.Common;
+using CashTrack.Domain.RecurringTransactions;
 using CashTrack.Domain.Tags;
 using CashTrack.Domain.Transactions;
 using CashTrack.Domain.Users;
@@ -29,7 +30,8 @@ internal static class TransactionDocumentMapper
         document.Description,
         new TagId(document.TagId),
         Enum.Parse<PaymentMethod>(document.PaymentMethod),
-        document.CreatedAt.ToDateTimeOffset());
+        document.CreatedAt.ToDateTimeOffset(),
+        document.RecurringTransactionId is null ? null : new RecurringTransactionId(document.RecurringTransactionId));
 
     public static TransactionDocument ToDocument(Transaction transaction) => new()
     {
@@ -40,6 +42,7 @@ internal static class TransactionDocumentMapper
         Description = transaction.Description,
         TagId = transaction.TagId.Value,
         PaymentMethod = transaction.PaymentMethod.ToString(),
+        RecurringTransactionId = transaction.RecurringTransactionId?.Value,
         CreatedAt = Timestamp.FromDateTimeOffset(transaction.CreatedAt),
     };
 }

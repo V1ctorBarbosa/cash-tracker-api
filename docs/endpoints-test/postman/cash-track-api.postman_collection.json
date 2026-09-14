@@ -163,6 +163,95 @@
           }
         }
       ]
+    },
+    {
+      "name": "Recurring Transactions",
+      "item": [
+        {
+          "name": "List recurring transactions",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/recurring-transactions"
+          }
+        },
+        {
+          "name": "Create recurring transaction",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/recurring-transactions",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"Expense\",\n  \"amount\": 1800.00,\n  \"description\": \"Aluguel\",\n  \"tagId\": \"\",\n  \"paymentMethod\": \"TransferenciaBancaria\",\n  \"dayOfMonth\": 5,\n  \"startDate\": \"2026-01-01\",\n  \"endDate\": null\n}"
+            }
+          }
+        },
+        {
+          "name": "Update recurring transaction",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/recurring-transactions/:id",
+            "variable": [{ "key": "id", "value": "" }],
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"Expense\",\n  \"amount\": 1850.00,\n  \"description\": \"Aluguel\",\n  \"tagId\": \"\",\n  \"paymentMethod\": \"TransferenciaBancaria\",\n  \"dayOfMonth\": 5,\n  \"startDate\": \"2026-01-01\",\n  \"endDate\": null,\n  \"active\": true\n}"
+            }
+          }
+        },
+        {
+          "name": "Delete recurring transaction",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/recurring-transactions/:id",
+            "variable": [{ "key": "id", "value": "" }]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Budgets",
+      "item": [
+        {
+          "name": "List budgets",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/budgets?month=2026-09",
+              "host": ["{{baseUrl}}"],
+              "path": ["budgets"],
+              "query": [{ "key": "month", "value": "2026-09" }]
+            }
+          }
+        },
+        {
+          "name": "Upsert budget",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/budgets/:tagId/:month",
+            "variable": [
+              { "key": "tagId", "value": "" },
+              { "key": "month", "value": "2026-09" }
+            ],
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"limitAmount\": 500.00\n}"
+            }
+          }
+        },
+        {
+          "name": "Delete budget",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/budgets/:tagId/:month",
+            "variable": [
+              { "key": "tagId", "value": "" },
+              { "key": "month", "value": "2026-09" }
+            ]
+          }
+        }
+      ]
     }
   ]
 }

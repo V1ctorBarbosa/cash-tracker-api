@@ -1,3 +1,4 @@
+using CashTrack.Application.RecurringTransactions;
 using CashTrack.Domain.Common;
 using CashTrack.Domain.Tags;
 using CashTrack.Domain.Transactions;
@@ -8,10 +9,14 @@ namespace CashTrack.Application.Transactions;
 public sealed class TransactionService
 {
     private readonly ITransactionRepository _transactionRepository;
+    private readonly RecurringTransactionMaterializationService _recurringTransactionMaterializationService;
 
-    public TransactionService(ITransactionRepository transactionRepository)
+    public TransactionService(
+        ITransactionRepository transactionRepository,
+        RecurringTransactionMaterializationService recurringTransactionMaterializationService)
     {
         _transactionRepository = transactionRepository;
+        _recurringTransactionMaterializationService = recurringTransactionMaterializationService;
     }
 
     public async Task<IReadOnlyList<TransactionDto>> ListAsync(
@@ -23,6 +28,13 @@ public sealed class TransactionService
         string? paymentMethod,
         CancellationToken cancellationToken = default)
     {
+        // Recurring transactions are only materialized for a bounded range (Section 12) -- an
+        // unbounded list has no "current month" to generate against.
+        if (from is { } boundedFrom && to is { } boundedTo)
+        {
+            await _recurringTransactionMaterializationService.MaterializeAsync(userId, boundedFrom, boundedTo, cancellationToken);
+        }
+
         var query = new TransactionQuery(
             from,
             to,
@@ -78,7 +90,8 @@ public sealed class TransactionService
             request.Description,
             new TagId(request.TagId),
             Enum.Parse<PaymentMethod>(request.PaymentMethod, ignoreCase: true),
-            existingTransaction.CreatedAt);
+            existingTransaction.CreatedAt,
+            existingTransaction.RecurringTransactionId);
 
         await _transactionRepository.SaveAsync(updatedTransaction, cancellationToken);
         return ToDto(updatedTransaction);
@@ -104,5 +117,6 @@ public sealed class TransactionService
         transaction.Description,
         transaction.TagId.Value,
         transaction.PaymentMethod.ToString(),
+        transaction.RecurringTransactionId?.Value,
         transaction.CreatedAt);
 }

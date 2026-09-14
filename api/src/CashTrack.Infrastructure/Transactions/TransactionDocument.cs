@@ -28,5 +28,8 @@ internal sealed class TransactionDocument
     public string PaymentMethod { get; set; } = string.Empty;
 
     [FirestoreProperty]
+    public string? RecurringTransactionId { get; set; }
+
+    [FirestoreProperty]
     public Timestamp CreatedAt { get; set; }
 }

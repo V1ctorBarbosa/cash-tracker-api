@@ -1,5 +1,7 @@
 using System.Globalization;
 using CashTrack.Application.Transactions;
+using CashTrack.Domain.Common;
+using CashTrack.Domain.RecurringTransactions;
 using CashTrack.Domain.Transactions;
 using CashTrack.Domain.Users;
 using Google.Cloud.Firestore;
@@ -18,6 +20,7 @@ public sealed class FirestoreTransactionRepository : ITransactionRepository
     private const string TagIdFieldName = "TagId";
     private const string TypeFieldName = "Type";
     private const string PaymentMethodFieldName = "PaymentMethod";
+    private const string RecurringTransactionIdFieldName = "RecurringTransactionId";
     private const string DateFormat = "yyyy-MM-dd";
 
     private readonly FirestoreDb _firestoreDb;
@@ -84,6 +87,26 @@ public sealed class FirestoreTransactionRepository : ITransactionRepository
         }
 
         return TransactionDocumentMapper.ToDomain(transactionId, document);
+    }
+
+    public async Task<bool> ExistsForRecurringTransactionAsync(
+        UserId userId,
+        RecurringTransactionId recurringTransactionId,
+        YearMonth month,
+        CancellationToken cancellationToken = default)
+    {
+        var monthStart = new DateOnly(month.Year, month.Month, 1);
+        var monthEnd = new DateOnly(month.Year, month.Month, DateTime.DaysInMonth(month.Year, month.Month));
+
+        var querySnapshot = await _firestoreDb.Collection(CollectionName)
+            .WhereEqualTo(UserIdFieldName, userId.Value)
+            .WhereEqualTo(RecurringTransactionIdFieldName, recurringTransactionId.Value)
+            .WhereGreaterThanOrEqualTo(DateFieldName, monthStart.ToString(DateFormat, CultureInfo.InvariantCulture))
+            .WhereLessThanOrEqualTo(DateFieldName, monthEnd.ToString(DateFormat, CultureInfo.InvariantCulture))
+            .Limit(1)
+            .GetSnapshotAsync(cancellationToken);
+
+        return querySnapshot.Count > 0;
     }
 
     public async Task SaveAsync(Transaction transaction, CancellationToken cancellationToken = default)

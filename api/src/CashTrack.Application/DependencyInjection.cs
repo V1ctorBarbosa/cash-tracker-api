@@ -1,3 +1,5 @@
+using CashTrack.Application.Budgets;
+using CashTrack.Application.RecurringTransactions;
 using CashTrack.Application.Tags;
 using CashTrack.Application.Transactions;
 using CashTrack.Application.Users;
@@ -12,6 +14,9 @@ public static class DependencyInjection
         services.AddScoped<UserProfileService>();
         services.AddScoped<TagService>();
         services.AddScoped<TransactionService>();
+        services.AddScoped<RecurringTransactionService>();
+        services.AddScoped<RecurringTransactionMaterializationService>();
+        services.AddScoped<BudgetService>();
 
         return services;
     }

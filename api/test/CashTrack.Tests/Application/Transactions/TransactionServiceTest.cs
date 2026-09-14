@@ -1,5 +1,7 @@
+using CashTrack.Application.RecurringTransactions;
 using CashTrack.Application.Transactions;
 using CashTrack.Domain.Common;
+using CashTrack.Domain.RecurringTransactions;
 using CashTrack.Domain.Tags;
 using CashTrack.Domain.Transactions;
 using CashTrack.Domain.Users;
@@ -11,12 +13,19 @@ namespace CashTrack.Tests.Application.Transactions;
 public sealed class TransactionServiceTest
 {
     private readonly ITransactionRepository _transactionRepository = Substitute.For<ITransactionRepository>();
+    private readonly IRecurringTransactionRepository _recurringTransactionRepository = Substitute.For<IRecurringTransactionRepository>();
     private readonly TransactionService _sut;
     private readonly UserId _userId = new("firebase-uid-123");
 
     public TransactionServiceTest()
     {
-        _sut = new TransactionService(_transactionRepository);
+        // No recurring transactions by default, so materialization (triggered whenever
+        // ListAsync is given a bounded range) is a real no-op instead of a mocked one --
+        // RecurringTransactionMaterializationService is sealed and can't be substituted.
+        _recurringTransactionRepository.ListByUserAsync(_userId, Arg.Any<CancellationToken>()).Returns([]);
+        var materializationService = new RecurringTransactionMaterializationService(_recurringTransactionRepository, _transactionRepository);
+
+        _sut = new TransactionService(_transactionRepository, materializationService);
     }
 
     [Fact]

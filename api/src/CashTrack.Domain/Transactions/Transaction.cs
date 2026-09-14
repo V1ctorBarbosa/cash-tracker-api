@@ -1,4 +1,5 @@
 using CashTrack.Domain.Common;
+using CashTrack.Domain.RecurringTransactions;
 using CashTrack.Domain.Tags;
 using CashTrack.Domain.Users;
 
@@ -27,6 +28,9 @@ public sealed class Transaction
 
     public PaymentMethod PaymentMethod { get; }
 
+    /// <summary>Set only when this transaction was materialized from a RecurringTransaction (Section 12); null for one the user logged directly.</summary>
+    public RecurringTransactionId? RecurringTransactionId { get; }
+
     public DateTimeOffset CreatedAt { get; }
 
     private Transaction(
@@ -38,6 +42,7 @@ public sealed class Transaction
         string description,
         TagId tagId,
         PaymentMethod paymentMethod,
+        RecurringTransactionId? recurringTransactionId,
         DateTimeOffset createdAt)
     {
         Id = id;
@@ -48,6 +53,7 @@ public sealed class Transaction
         Description = description;
         TagId = tagId;
         PaymentMethod = paymentMethod;
+        RecurringTransactionId = recurringTransactionId;
         CreatedAt = createdAt;
     }
 
@@ -60,13 +66,14 @@ public sealed class Transaction
         string description,
         TagId tagId,
         PaymentMethod paymentMethod,
-        DateTimeOffset createdAt)
+        DateTimeOffset createdAt,
+        RecurringTransactionId? recurringTransactionId = null)
     {
         if (string.IsNullOrWhiteSpace(description))
         {
             throw new ArgumentException("Description cannot be empty.", nameof(description));
         }
 
-        return new Transaction(id, userId, type, amount, date, description.Trim(), tagId, paymentMethod, createdAt);
+        return new Transaction(id, userId, type, amount, date, description.Trim(), tagId, paymentMethod, recurringTransactionId, createdAt);
     }
 }
