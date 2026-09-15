@@ -1,4 +1,7 @@
+using CashTrack.Application.Budgets;
 using CashTrack.Application.Tags;
+using CashTrack.Domain.Budgets;
+using CashTrack.Domain.Common;
 using CashTrack.Domain.Tags;
 using CashTrack.Domain.Transactions;
 using CashTrack.Domain.Users;
@@ -10,12 +13,18 @@ namespace CashTrack.Tests.Application.Tags;
 public sealed class TagServiceTest
 {
     private readonly ITagRepository _tagRepository = Substitute.For<ITagRepository>();
+    private readonly IBudgetRepository _budgetRepository = Substitute.For<IBudgetRepository>();
     private readonly TagService _sut;
     private readonly UserId _userId = new("firebase-uid-123");
 
     public TagServiceTest()
     {
-        _sut = new TagService(_tagRepository);
+        // No budgets by default, so cascading the delete is a real no-op instead of a mocked
+        // one -- BudgetService is sealed and can't be substituted.
+        _budgetRepository.ListByUserAsync(_userId, null, Arg.Any<CancellationToken>()).Returns([]);
+        var budgetService = new BudgetService(_budgetRepository);
+
+        _sut = new TagService(_tagRepository, budgetService);
     }
 
     [Fact]
@@ -115,5 +124,40 @@ public sealed class TagServiceTest
         // Assert
         result.Should().BeTrue();
         await _tagRepository.Received(1).DeleteAsync(_userId, tagId, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task DeleteAsync_AlsoDeletesEveryBudget_SetForTheDeletedTag()
+    {
+        // Arrange -- otherwise a budget is left pointing at a tag that no longer exists, showing
+        // up on the dashboard as an unresolvable raw tag id with a nonsensical "100% livre".
+        var tagId = new TagId("tag-mercado");
+        var existingTag = Tag.Create(tagId, _userId, "Mercado", new TagColor("#3B82F6"), TransactionType.Expense);
+        _tagRepository.GetByIdAsync(_userId, tagId, Arg.Any<CancellationToken>()).Returns(existingTag);
+
+        var budgetForThisTag = Budget.Create(_userId, tagId, new YearMonth(2026, 9), new Money(1000m));
+        var budgetForAnotherTag = Budget.Create(_userId, new TagId("tag-lazer"), new YearMonth(2026, 9), new Money(200m));
+        _budgetRepository.ListByUserAsync(_userId, null, Arg.Any<CancellationToken>()).Returns([budgetForThisTag, budgetForAnotherTag]);
+
+        // Act
+        await _sut.DeleteAsync(_userId, tagId);
+
+        // Assert
+        await _budgetRepository.Received(1).DeleteAsync(_userId, budgetForThisTag.Id, Arg.Any<CancellationToken>());
+        await _budgetRepository.DidNotReceive().DeleteAsync(_userId, budgetForAnotherTag.Id, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task DeleteAsync_DoesNotTouchBudgets_WhenTagDoesNotBelongToUser()
+    {
+        // Arrange
+        var tagId = new TagId("tag-mercado");
+        _tagRepository.GetByIdAsync(_userId, tagId, Arg.Any<CancellationToken>()).Returns((Tag?)null);
+
+        // Act
+        await _sut.DeleteAsync(_userId, tagId);
+
+        // Assert
+        await _budgetRepository.DidNotReceive().DeleteAsync(Arg.Any<UserId>(), Arg.Any<BudgetId>(), Arg.Any<CancellationToken>());
     }
 }

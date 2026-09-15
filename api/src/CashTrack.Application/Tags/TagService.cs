@@ -1,3 +1,4 @@
+using CashTrack.Application.Budgets;
 using CashTrack.Domain.Tags;
 using CashTrack.Domain.Transactions;
 using CashTrack.Domain.Users;
@@ -7,10 +8,12 @@ namespace CashTrack.Application.Tags;
 public sealed class TagService
 {
     private readonly ITagRepository _tagRepository;
+    private readonly BudgetService _budgetService;
 
-    public TagService(ITagRepository tagRepository)
+    public TagService(ITagRepository tagRepository, BudgetService budgetService)
     {
         _tagRepository = tagRepository;
+        _budgetService = budgetService;
     }
 
     public async Task<IReadOnlyList<TagDto>> ListAsync(UserId userId, CancellationToken cancellationToken = default)
@@ -64,6 +67,7 @@ public sealed class TagService
         }
 
         await _tagRepository.DeleteAsync(userId, tagId, cancellationToken);
+        await _budgetService.DeleteAllForTagAsync(userId, tagId, cancellationToken);
         return true;
     }
 

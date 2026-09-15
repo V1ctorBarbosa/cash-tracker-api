@@ -92,4 +92,36 @@ public sealed class BudgetServiceTest
         result.Should().BeTrue();
         await _budgetRepository.Received(1).DeleteAsync(_userId, budget.Id, Arg.Any<CancellationToken>());
     }
+
+    [Fact]
+    public async Task DeleteAllForTagAsync_DeletesEveryBudget_AcrossEveryMonth_ForThatTag()
+    {
+        // Arrange
+        var tagId = new TagId("tag-lazer");
+        var septemberBudget = Budget.Create(_userId, tagId, new YearMonth(2026, 9), new Money(200.00m));
+        var octoberBudget = Budget.Create(_userId, tagId, new YearMonth(2026, 10), new Money(200.00m));
+        var otherTagBudget = Budget.Create(_userId, new TagId("tag-mercado"), new YearMonth(2026, 9), new Money(500.00m));
+        _budgetRepository.ListByUserAsync(_userId, null, Arg.Any<CancellationToken>()).Returns([septemberBudget, octoberBudget, otherTagBudget]);
+
+        // Act
+        await _sut.DeleteAllForTagAsync(_userId, tagId);
+
+        // Assert
+        await _budgetRepository.Received(1).DeleteAsync(_userId, septemberBudget.Id, Arg.Any<CancellationToken>());
+        await _budgetRepository.Received(1).DeleteAsync(_userId, octoberBudget.Id, Arg.Any<CancellationToken>());
+        await _budgetRepository.DidNotReceive().DeleteAsync(_userId, otherTagBudget.Id, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task DeleteAllForTagAsync_DoesNothing_WhenNoBudgetsExistForThatTag()
+    {
+        // Arrange
+        _budgetRepository.ListByUserAsync(_userId, null, Arg.Any<CancellationToken>()).Returns([]);
+
+        // Act
+        await _sut.DeleteAllForTagAsync(_userId, new TagId("tag-lazer"));
+
+        // Assert
+        await _budgetRepository.DidNotReceive().DeleteAsync(Arg.Any<UserId>(), Arg.Any<BudgetId>(), Arg.Any<CancellationToken>());
+    }
 }
