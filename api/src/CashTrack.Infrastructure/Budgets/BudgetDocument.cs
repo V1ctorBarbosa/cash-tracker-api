@@ -1,3 +1,4 @@
+using CashTrack.Infrastructure.Common;
 using Google.Cloud.Firestore;
 
 namespace CashTrack.Infrastructure.Budgets;
@@ -15,6 +16,6 @@ internal sealed class BudgetDocument
     [FirestoreProperty]
     public string Month { get; set; } = string.Empty;
 
-    [FirestoreProperty]
+    [FirestoreProperty(ConverterType = typeof(DecimalConverter))]
     public decimal LimitAmount { get; set; }
 }

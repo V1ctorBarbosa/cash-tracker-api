@@ -1,3 +1,4 @@
+using CashTrack.Infrastructure.Common;
 using Google.Cloud.Firestore;
 
 namespace CashTrack.Infrastructure.RecurringTransactions;
@@ -11,7 +12,7 @@ internal sealed class RecurringTransactionDocument
     [FirestoreProperty]
     public string Type { get; set; } = string.Empty;
 
-    [FirestoreProperty]
+    [FirestoreProperty(ConverterType = typeof(DecimalConverter))]
     public decimal Amount { get; set; }
 
     [FirestoreProperty]
