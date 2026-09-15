@@ -5,7 +5,7 @@ public sealed record TransactionDto(
     string Type,
     decimal Amount,
     DateOnly Date,
-    string Description,
+    string? Description,
     string TagId,
     string PaymentMethod,
     string? RecurringTransactionId,

@@ -299,7 +299,7 @@ Example:
 }
 ```
 
-`amount` is always stored as a positive value (Section 10) — the sign is derived from `type` when computing totals, never stored redundantly. `recurringTransactionId` is set only when the transaction was generated from a `RecurringTransaction` (Section 11); it is `null` for transactions logged directly by the user.
+`amount` is always stored as a positive value (Section 10) — the sign is derived from `type` when computing totals, never stored redundantly. `recurringTransactionId` is set only when the transaction was generated from a `RecurringTransaction` (Section 11); it is `null` for transactions logged directly by the user. `description` is optional — a blank or whitespace-only value normalizes to `null` rather than being rejected; the tag already carries most of the "what" for a quick entry, so the field exists for extra detail, not as a required label.
 
 `date` is the date the movement happened (editable by the user, e.g. backdating a purchase); `createdAt` is the server timestamp of when the record was created, kept for audit purposes and never shown as the primary date in the UI.
 
@@ -351,7 +351,7 @@ Example:
 }
 ```
 
-`endDate` is `null` for an indefinite recurrence. `active` lets the user pause a recurrence without deleting its definition or its history of already-generated transactions.
+`endDate` is `null` for an indefinite recurrence. `active` lets the user pause a recurrence without deleting its definition or its history of already-generated transactions. `description` is optional, same normalization as `Transaction` (Section 9) — every transaction materialized from this recurrence (Section 12) carries it through as-is, including when it's `null`.
 
 ---
 

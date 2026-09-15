@@ -4,6 +4,6 @@ public sealed record UpdateTransactionRequest(
     string Type,
     decimal Amount,
     DateOnly Date,
-    string Description,
+    string? Description,
     string TagId,
     string PaymentMethod);

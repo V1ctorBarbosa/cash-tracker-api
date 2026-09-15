@@ -23,7 +23,7 @@ public sealed class RecurringTransaction
 
     public Money Amount { get; }
 
-    public string Description { get; }
+    public string? Description { get; }
 
     public TagId TagId { get; }
 
@@ -42,7 +42,7 @@ public sealed class RecurringTransaction
         UserId userId,
         TransactionType type,
         Money amount,
-        string description,
+        string? description,
         TagId tagId,
         PaymentMethod paymentMethod,
         int dayOfMonth,
@@ -68,7 +68,7 @@ public sealed class RecurringTransaction
         UserId userId,
         TransactionType type,
         Money amount,
-        string description,
+        string? description,
         TagId tagId,
         PaymentMethod paymentMethod,
         int dayOfMonth,
@@ -76,11 +76,6 @@ public sealed class RecurringTransaction
         DateOnly? endDate,
         bool active)
     {
-        if (string.IsNullOrWhiteSpace(description))
-        {
-            throw new ArgumentException("Description cannot be empty.", nameof(description));
-        }
-
         if (dayOfMonth is < MinDayOfMonth or > MaxDayOfMonth)
         {
             throw new ArgumentOutOfRangeException(nameof(dayOfMonth), dayOfMonth, $"Day of month must be between {MinDayOfMonth} and {MaxDayOfMonth}.");
@@ -91,7 +86,9 @@ public sealed class RecurringTransaction
             throw new ArgumentException("End date cannot be before the start date.", nameof(endDate));
         }
 
-        return new RecurringTransaction(id, userId, type, amount, description.Trim(), tagId, paymentMethod, dayOfMonth, startDate, endDate, active);
+        var normalizedDescription = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
+
+        return new RecurringTransaction(id, userId, type, amount, normalizedDescription, tagId, paymentMethod, dayOfMonth, startDate, endDate, active);
     }
 
     /// <summary>

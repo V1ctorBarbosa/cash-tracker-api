@@ -19,7 +19,7 @@ internal sealed class TransactionDocument
     public string Date { get; set; } = string.Empty;
 
     [FirestoreProperty]
-    public string Description { get; set; } = string.Empty;
+    public string? Description { get; set; }
 
     [FirestoreProperty]
     public string TagId { get; set; } = string.Empty;

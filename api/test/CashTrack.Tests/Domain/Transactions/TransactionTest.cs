@@ -54,18 +54,19 @@ public sealed class TransactionTest
     }
 
     [Theory]
+    [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
-    public void Create_Throws_WhenDescriptionIsEmptyOrWhitespace(string description)
+    public void Create_NormalizesDescription_ToNull_WhenEmptyOrWhitespace(string? description)
     {
         // Act
-        var act = () => CreateValidTransaction(description: description);
+        var transaction = CreateValidTransaction(description: description);
 
         // Assert
-        act.Should().Throw<ArgumentException>();
+        transaction.Description.Should().BeNull();
     }
 
-    private static Transaction CreateValidTransaction(string description = "Supermercado") => Transaction.Create(
+    private static Transaction CreateValidTransaction(string? description = "Supermercado") => Transaction.Create(
         new TransactionId("transaction-1"),
         new UserId("firebase-uid-123"),
         TransactionType.Expense,

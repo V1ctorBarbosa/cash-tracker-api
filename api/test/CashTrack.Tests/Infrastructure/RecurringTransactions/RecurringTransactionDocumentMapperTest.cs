@@ -68,6 +68,30 @@ public sealed class RecurringTransactionDocumentMapperTest
     }
 
     [Fact]
+    public void ToDocument_MapsNullDescription_ToNull()
+    {
+        // Arrange
+        var recurringTransaction = RecurringTransaction.Create(
+            new RecurringTransactionId("recurring-1"),
+            new UserId("firebase-uid-123"),
+            TransactionType.Expense,
+            new Money(1800.00m),
+            null,
+            new TagId("tag-moradia"),
+            PaymentMethod.TransferenciaBancaria,
+            5,
+            new DateOnly(2026, 1, 1),
+            null,
+            true);
+
+        // Act
+        var document = RecurringTransactionDocumentMapper.ToDocument(recurringTransaction);
+
+        // Assert
+        document.Description.Should().BeNull();
+    }
+
+    [Fact]
     public void ToDomain_RoundTrips_ThroughToDocument()
     {
         // Arrange

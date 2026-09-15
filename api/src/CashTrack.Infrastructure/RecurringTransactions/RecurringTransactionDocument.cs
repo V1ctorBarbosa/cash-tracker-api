@@ -15,7 +15,7 @@ internal sealed class RecurringTransactionDocument
     public decimal Amount { get; set; }
 
     [FirestoreProperty]
-    public string Description { get; set; } = string.Empty;
+    public string? Description { get; set; }
 
     [FirestoreProperty]
     public string TagId { get; set; } = string.Empty;

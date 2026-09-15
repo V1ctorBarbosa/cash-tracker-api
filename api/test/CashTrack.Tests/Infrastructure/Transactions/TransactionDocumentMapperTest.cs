@@ -69,4 +69,26 @@ public sealed class TransactionDocumentMapperTest
         roundTrippedTransaction.PaymentMethod.Should().Be(originalTransaction.PaymentMethod);
         roundTrippedTransaction.CreatedAt.Should().Be(originalTransaction.CreatedAt);
     }
+
+    [Fact]
+    public void ToDocument_MapsNullDescription_ToNull()
+    {
+        // Arrange
+        var transaction = Transaction.Create(
+            new TransactionId("transaction-1"),
+            new UserId("firebase-uid-123"),
+            TransactionType.Expense,
+            new Money(89.90m),
+            new DateOnly(2026, 9, 10),
+            null,
+            new TagId("tag-mercado"),
+            PaymentMethod.CartaoDebito,
+            DateTimeOffset.Parse("2026-09-10T18:32:00Z"));
+
+        // Act
+        var document = TransactionDocumentMapper.ToDocument(transaction);
+
+        // Assert
+        document.Description.Should().BeNull();
+    }
 }

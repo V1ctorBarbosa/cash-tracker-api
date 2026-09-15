@@ -22,15 +22,16 @@ public sealed class RecurringTransactionTest
     }
 
     [Theory]
+    [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
-    public void Create_Throws_WhenDescriptionIsEmptyOrWhitespace(string description)
+    public void Create_NormalizesDescription_ToNull_WhenEmptyOrWhitespace(string? description)
     {
         // Act
-        var act = () => CreateValidRecurringTransaction(description: description);
+        var recurringTransaction = CreateValidRecurringTransaction(description: description);
 
         // Assert
-        act.Should().Throw<ArgumentException>();
+        recurringTransaction.Description.Should().BeNull();
     }
 
     [Theory]
@@ -153,7 +154,7 @@ public sealed class RecurringTransactionTest
     }
 
     private static RecurringTransaction CreateValidRecurringTransaction(
-        string description = "Aluguel",
+        string? description = "Aluguel",
         int dayOfMonth = 5,
         DateOnly? startDate = null,
         DateOnly? endDate = null,

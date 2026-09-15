@@ -22,7 +22,7 @@ public sealed class Transaction
 
     public DateOnly Date { get; }
 
-    public string Description { get; }
+    public string? Description { get; }
 
     public TagId TagId { get; }
 
@@ -39,7 +39,7 @@ public sealed class Transaction
         TransactionType type,
         Money amount,
         DateOnly date,
-        string description,
+        string? description,
         TagId tagId,
         PaymentMethod paymentMethod,
         RecurringTransactionId? recurringTransactionId,
@@ -63,17 +63,14 @@ public sealed class Transaction
         TransactionType type,
         Money amount,
         DateOnly date,
-        string description,
+        string? description,
         TagId tagId,
         PaymentMethod paymentMethod,
         DateTimeOffset createdAt,
         RecurringTransactionId? recurringTransactionId = null)
     {
-        if (string.IsNullOrWhiteSpace(description))
-        {
-            throw new ArgumentException("Description cannot be empty.", nameof(description));
-        }
+        var normalizedDescription = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
 
-        return new Transaction(id, userId, type, amount, date, description.Trim(), tagId, paymentMethod, recurringTransactionId, createdAt);
+        return new Transaction(id, userId, type, amount, date, normalizedDescription, tagId, paymentMethod, recurringTransactionId, createdAt);
     }
 }
