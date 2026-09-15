@@ -9,6 +9,7 @@ using CashTrack.Domain.Tags;
 using CashTrack.Domain.Transactions;
 using CashTrack.Domain.Users;
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using Transaction = CashTrack.Domain.Transactions.Transaction;
 
@@ -31,7 +32,10 @@ public sealed class DashboardServiceTest
         // No recurring transactions by default, so materialization is a real no-op --
         // RecurringTransactionMaterializationService is sealed and can't be substituted.
         _recurringTransactionRepository.ListByUserAsync(_userId, Arg.Any<CancellationToken>()).Returns([]);
-        var materializationService = new RecurringTransactionMaterializationService(_recurringTransactionRepository, _transactionRepository);
+        var materializationService = new RecurringTransactionMaterializationService(
+            _recurringTransactionRepository,
+            _transactionRepository,
+            NullLogger<RecurringTransactionMaterializationService>.Instance);
 
         _tagRepository.ListByUserAsync(_userId, Arg.Any<CancellationToken>()).Returns([
             Tag.Create(_moradiaTagId, _userId, "Moradia", new TagColor("#000000"), TransactionType.Expense),

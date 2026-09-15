@@ -27,7 +27,8 @@ internal static class RecurringTransactionDocumentMapper
         document.DayOfMonth,
         DateOnly.ParseExact(document.StartDate, DateFormat, CultureInfo.InvariantCulture),
         document.EndDate is null ? null : DateOnly.ParseExact(document.EndDate, DateFormat, CultureInfo.InvariantCulture),
-        document.Active);
+        document.Active,
+        document.SkippedMonths.Select(YearMonth.Parse).ToList());
 
     public static RecurringTransactionDocument ToDocument(RecurringTransaction recurringTransaction) => new()
     {
@@ -41,5 +42,6 @@ internal static class RecurringTransactionDocumentMapper
         StartDate = recurringTransaction.StartDate.ToString(DateFormat, CultureInfo.InvariantCulture),
         EndDate = recurringTransaction.EndDate?.ToString(DateFormat, CultureInfo.InvariantCulture),
         Active = recurringTransaction.Active,
+        SkippedMonths = recurringTransaction.SkippedMonths.Select(month => month.ToString()).ToList(),
     };
 }

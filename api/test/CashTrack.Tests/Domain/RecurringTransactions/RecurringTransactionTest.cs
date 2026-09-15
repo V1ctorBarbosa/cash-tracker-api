@@ -128,6 +128,71 @@ public sealed class RecurringTransactionTest
     }
 
     [Fact]
+    public void AppliesToMonth_ReturnsFalse_WhenTheMonthWasExplicitlySkipped()
+    {
+        // Arrange
+        var recurringTransaction = CreateValidRecurringTransaction(startDate: new DateOnly(2026, 1, 1)).SkipMonth(new YearMonth(2026, 9));
+
+        // Act
+        var applies = recurringTransaction.AppliesToMonth(new YearMonth(2026, 9));
+
+        // Assert
+        applies.Should().BeFalse();
+    }
+
+    [Fact]
+    public void AppliesToMonth_StillReturnsTrue_ForAnUnskippedMonth_AfterAnotherMonthWasSkipped()
+    {
+        // Arrange
+        var recurringTransaction = CreateValidRecurringTransaction(startDate: new DateOnly(2026, 1, 1)).SkipMonth(new YearMonth(2026, 9));
+
+        // Act
+        var applies = recurringTransaction.AppliesToMonth(new YearMonth(2026, 10));
+
+        // Assert
+        applies.Should().BeTrue();
+    }
+
+    [Fact]
+    public void SkipMonth_AddsTheMonth_ToSkippedMonths()
+    {
+        // Arrange
+        var recurringTransaction = CreateValidRecurringTransaction();
+
+        // Act
+        var updated = recurringTransaction.SkipMonth(new YearMonth(2026, 9));
+
+        // Assert
+        updated.SkippedMonths.Should().ContainSingle().Which.Should().Be(new YearMonth(2026, 9));
+    }
+
+    [Fact]
+    public void SkipMonth_IsIdempotent_WhenTheMonthIsAlreadySkipped()
+    {
+        // Arrange
+        var recurringTransaction = CreateValidRecurringTransaction().SkipMonth(new YearMonth(2026, 9));
+
+        // Act
+        var updated = recurringTransaction.SkipMonth(new YearMonth(2026, 9));
+
+        // Assert
+        updated.SkippedMonths.Should().ContainSingle();
+    }
+
+    [Fact]
+    public void SkipMonth_DoesNotMutateTheOriginalInstance()
+    {
+        // Arrange
+        var recurringTransaction = CreateValidRecurringTransaction();
+
+        // Act
+        recurringTransaction.SkipMonth(new YearMonth(2026, 9));
+
+        // Assert
+        recurringTransaction.SkippedMonths.Should().BeEmpty();
+    }
+
+    [Fact]
     public void GetDateForMonth_UsesDayOfMonth_WhenItFitsInTheMonth()
     {
         // Arrange

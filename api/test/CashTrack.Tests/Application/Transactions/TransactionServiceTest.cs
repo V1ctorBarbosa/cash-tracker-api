@@ -6,6 +6,7 @@ using CashTrack.Domain.Tags;
 using CashTrack.Domain.Transactions;
 using CashTrack.Domain.Users;
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 
 namespace CashTrack.Tests.Application.Transactions;
@@ -21,11 +22,16 @@ public sealed class TransactionServiceTest
     {
         // No recurring transactions by default, so materialization (triggered whenever
         // ListAsync is given a bounded range) is a real no-op instead of a mocked one --
-        // RecurringTransactionMaterializationService is sealed and can't be substituted.
+        // RecurringTransactionMaterializationService and RecurringTransactionService are both
+        // sealed and can't be substituted.
         _recurringTransactionRepository.ListByUserAsync(_userId, Arg.Any<CancellationToken>()).Returns([]);
-        var materializationService = new RecurringTransactionMaterializationService(_recurringTransactionRepository, _transactionRepository);
+        var materializationService = new RecurringTransactionMaterializationService(
+            _recurringTransactionRepository,
+            _transactionRepository,
+            NullLogger<RecurringTransactionMaterializationService>.Instance);
+        var recurringTransactionService = new RecurringTransactionService(_recurringTransactionRepository);
 
-        _sut = new TransactionService(_transactionRepository, materializationService);
+        _sut = new TransactionService(_transactionRepository, materializationService, recurringTransactionService);
     }
 
     [Fact]
@@ -175,6 +181,65 @@ public sealed class TransactionServiceTest
         // Assert
         result.Should().BeTrue();
         await _transactionRepository.Received(1).DeleteAsync(_userId, transactionId, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task DeleteAsync_DoesNotTouchAnyRecurringDefinition_WhenTheTransactionIsNotRecurring()
+    {
+        // Arrange
+        var transactionId = new TransactionId("transaction-1");
+        var existingTransaction = CreateValidTransaction();
+        _transactionRepository.GetByIdAsync(_userId, transactionId, Arg.Any<CancellationToken>()).Returns(existingTransaction);
+
+        // Act
+        await _sut.DeleteAsync(_userId, transactionId);
+
+        // Assert
+        await _recurringTransactionRepository.DidNotReceive().SaveAsync(Arg.Any<RecurringTransaction>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task DeleteAsync_SkipsTheMonthOnTheRecurringDefinition_WhenTheTransactionWasMaterializedFromOne()
+    {
+        // Arrange
+        var transactionId = new TransactionId("transaction-1");
+        var recurringTransactionId = new RecurringTransactionId("recurring-1");
+        var existingTransaction = Transaction.Create(
+            transactionId,
+            _userId,
+            TransactionType.Income,
+            new Money(5200.00m),
+            new DateOnly(2026, 9, 10),
+            "Salário",
+            new TagId("tag-salario"),
+            PaymentMethod.Pix,
+            DateTimeOffset.UtcNow,
+            recurringTransactionId);
+        _transactionRepository.GetByIdAsync(_userId, transactionId, Arg.Any<CancellationToken>()).Returns(existingTransaction);
+
+        var existingRecurringTransaction = RecurringTransaction.Create(
+            recurringTransactionId,
+            _userId,
+            TransactionType.Income,
+            new Money(5200.00m),
+            "Salário",
+            new TagId("tag-salario"),
+            PaymentMethod.Pix,
+            10,
+            new DateOnly(2026, 1, 1),
+            null,
+            active: true);
+        _recurringTransactionRepository
+            .GetByIdAsync(_userId, recurringTransactionId, Arg.Any<CancellationToken>())
+            .Returns(existingRecurringTransaction);
+
+        // Act
+        await _sut.DeleteAsync(_userId, transactionId);
+
+        // Assert
+        await _recurringTransactionRepository.Received(1).SaveAsync(
+            Arg.Is<RecurringTransaction>(recurringTransaction => recurringTransaction.SkippedMonths.Contains(new YearMonth(2026, 9))),
+            Arg.Any<CancellationToken>());
     }
 
     private Transaction CreateValidTransaction() => Transaction.Create(

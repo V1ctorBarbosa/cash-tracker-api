@@ -36,4 +36,8 @@ internal sealed class RecurringTransactionDocument
 
     [FirestoreProperty]
     public bool Active { get; set; }
+
+    /// <summary>Skipped months, each stored as "yyyy-MM".</summary>
+    [FirestoreProperty]
+    public List<string> SkippedMonths { get; set; } = [];
 }

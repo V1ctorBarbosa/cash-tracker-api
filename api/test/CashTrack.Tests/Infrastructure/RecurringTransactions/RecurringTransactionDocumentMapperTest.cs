@@ -126,4 +126,81 @@ public sealed class RecurringTransactionDocumentMapperTest
         roundTripped.EndDate.Should().Be(originalRecurringTransaction.EndDate);
         roundTripped.Active.Should().Be(originalRecurringTransaction.Active);
     }
+
+    [Fact]
+    public void ToDocument_MapsSkippedMonths_AsYearMonthStrings()
+    {
+        // Arrange
+        var recurringTransaction = RecurringTransaction.Create(
+            new RecurringTransactionId("recurring-1"),
+            new UserId("firebase-uid-123"),
+            TransactionType.Income,
+            new Money(5200.00m),
+            "Salário",
+            new TagId("tag-salario"),
+            PaymentMethod.Pix,
+            10,
+            new DateOnly(2026, 1, 1),
+            null,
+            true,
+            [new YearMonth(2026, 9)]);
+
+        // Act
+        var document = RecurringTransactionDocumentMapper.ToDocument(recurringTransaction);
+
+        // Assert
+        document.SkippedMonths.Should().ContainSingle().Which.Should().Be("2026-09");
+    }
+
+    [Fact]
+    public void ToDomain_RoundTrips_SkippedMonths()
+    {
+        // Arrange
+        var id = new RecurringTransactionId("recurring-1");
+        var originalRecurringTransaction = RecurringTransaction.Create(
+            id,
+            new UserId("firebase-uid-123"),
+            TransactionType.Income,
+            new Money(5200.00m),
+            "Salário",
+            new TagId("tag-salario"),
+            PaymentMethod.Pix,
+            10,
+            new DateOnly(2026, 1, 1),
+            null,
+            true,
+            [new YearMonth(2026, 9), new YearMonth(2026, 10)]);
+
+        // Act
+        var document = RecurringTransactionDocumentMapper.ToDocument(originalRecurringTransaction);
+        var roundTripped = RecurringTransactionDocumentMapper.ToDomain(id, document);
+
+        // Assert
+        roundTripped.SkippedMonths.Should().BeEquivalentTo(originalRecurringTransaction.SkippedMonths);
+    }
+
+    [Fact]
+    public void ToDomain_MapsMissingSkippedMonths_AsEmpty()
+    {
+        // Arrange
+        var document = new RecurringTransactionDocument
+        {
+            UserId = "firebase-uid-123",
+            Type = nameof(TransactionType.Expense),
+            Amount = 1800.00m,
+            Description = "Aluguel",
+            TagId = "tag-moradia",
+            PaymentMethod = nameof(PaymentMethod.TransferenciaBancaria),
+            DayOfMonth = 5,
+            StartDate = "2026-01-01",
+            EndDate = null,
+            Active = true,
+        };
+
+        // Act
+        var recurringTransaction = RecurringTransactionDocumentMapper.ToDomain(new RecurringTransactionId("recurring-1"), document);
+
+        // Assert
+        recurringTransaction.SkippedMonths.Should().BeEmpty();
+    }
 }

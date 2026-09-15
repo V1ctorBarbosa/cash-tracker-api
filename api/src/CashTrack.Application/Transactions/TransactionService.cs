@@ -10,13 +10,16 @@ public sealed class TransactionService
 {
     private readonly ITransactionRepository _transactionRepository;
     private readonly RecurringTransactionMaterializationService _recurringTransactionMaterializationService;
+    private readonly RecurringTransactionService _recurringTransactionService;
 
     public TransactionService(
         ITransactionRepository transactionRepository,
-        RecurringTransactionMaterializationService recurringTransactionMaterializationService)
+        RecurringTransactionMaterializationService recurringTransactionMaterializationService,
+        RecurringTransactionService recurringTransactionService)
     {
         _transactionRepository = transactionRepository;
         _recurringTransactionMaterializationService = recurringTransactionMaterializationService;
+        _recurringTransactionService = recurringTransactionService;
     }
 
     public async Task<IReadOnlyList<TransactionDto>> ListAsync(
@@ -106,6 +109,14 @@ public sealed class TransactionService
         }
 
         await _transactionRepository.DeleteAsync(userId, transactionId, cancellationToken);
+
+        // Without this, the next bounded-range query (history, dashboard) would see no transaction
+        // for this recurrence/month and lazily re-materialize the exact one just deleted.
+        if (existingTransaction.RecurringTransactionId is { } recurringTransactionId)
+        {
+            await _recurringTransactionService.SkipMonthAsync(userId, recurringTransactionId, YearMonth.FromDate(existingTransaction.Date), cancellationToken);
+        }
+
         return true;
     }
 

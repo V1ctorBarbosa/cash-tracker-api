@@ -89,6 +89,57 @@ public sealed class RecurringTransactionServiceTest
     }
 
     [Fact]
+    public async Task UpdateAsync_PreservesSkippedMonths_WhenEditingOtherFields()
+    {
+        // Arrange -- editing the amount/day/etc. of a recurrence must not silently un-skip a
+        // month the user explicitly deleted an occurrence for.
+        var id = new RecurringTransactionId("recurring-1");
+        var existing = CreateValidRecurringTransaction().SkipMonth(new YearMonth(2026, 9));
+        _recurringTransactionRepository.GetByIdAsync(_userId, id, Arg.Any<CancellationToken>()).Returns(existing);
+        var request = new UpdateRecurringTransactionRequest(
+            "Expense", 2000.00m, "Aluguel", "tag-moradia", "TransferenciaBancaria", 5, new DateOnly(2026, 1, 1), null, true);
+
+        // Act
+        var result = await _sut.UpdateAsync(_userId, id, request);
+
+        // Assert
+        result.Should().NotBeNull();
+        await _recurringTransactionRepository.Received(1).SaveAsync(
+            Arg.Is<RecurringTransaction>(recurring => recurring.SkippedMonths.Contains(new YearMonth(2026, 9))),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task SkipMonthAsync_SavesTheRecurringTransaction_WithTheMonthAddedToSkippedMonths()
+    {
+        // Arrange
+        var id = new RecurringTransactionId("recurring-1");
+        _recurringTransactionRepository.GetByIdAsync(_userId, id, Arg.Any<CancellationToken>()).Returns(CreateValidRecurringTransaction());
+
+        // Act
+        await _sut.SkipMonthAsync(_userId, id, new YearMonth(2026, 9));
+
+        // Assert
+        await _recurringTransactionRepository.Received(1).SaveAsync(
+            Arg.Is<RecurringTransaction>(recurring => recurring.SkippedMonths.Contains(new YearMonth(2026, 9))),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task SkipMonthAsync_DoesNothing_WhenRecurringTransactionDoesNotBelongToUser()
+    {
+        // Arrange
+        var id = new RecurringTransactionId("recurring-1");
+        _recurringTransactionRepository.GetByIdAsync(_userId, id, Arg.Any<CancellationToken>()).Returns((RecurringTransaction?)null);
+
+        // Act
+        await _sut.SkipMonthAsync(_userId, id, new YearMonth(2026, 9));
+
+        // Assert
+        await _recurringTransactionRepository.DidNotReceive().SaveAsync(Arg.Any<RecurringTransaction>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task DeleteAsync_ReturnsFalse_WhenRecurringTransactionDoesNotBelongToUser()
     {
         // Arrange

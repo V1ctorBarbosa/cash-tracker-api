@@ -1,6 +1,7 @@
 using CashTrack.Application.Transactions;
 using CashTrack.Domain.Common;
 using CashTrack.Domain.Users;
+using Microsoft.Extensions.Logging;
 using Transaction = CashTrack.Domain.Transactions.Transaction;
 using TransactionId = CashTrack.Domain.Transactions.TransactionId;
 
@@ -14,15 +15,26 @@ namespace CashTrack.Application.RecurringTransactions;
 /// </summary>
 public sealed class RecurringTransactionMaterializationService
 {
+    /// <summary>
+    /// Never materialize more than this many months into the future, regardless of the requested
+    /// range -- a caller passing an unbounded-looking "all time" range (e.g. a far-future upper
+    /// bound used just to mean "everything so far") must not turn into years of pre-generated,
+    /// not-yet-happened transactions for every active recurrence.
+    /// </summary>
+    private const int MaxMonthsAheadToMaterialize = 12;
+
     private readonly IRecurringTransactionRepository _recurringTransactionRepository;
     private readonly ITransactionRepository _transactionRepository;
+    private readonly ILogger<RecurringTransactionMaterializationService> _logger;
 
     public RecurringTransactionMaterializationService(
         IRecurringTransactionRepository recurringTransactionRepository,
-        ITransactionRepository transactionRepository)
+        ITransactionRepository transactionRepository,
+        ILogger<RecurringTransactionMaterializationService> logger)
     {
         _recurringTransactionRepository = recurringTransactionRepository;
         _transactionRepository = transactionRepository;
+        _logger = logger;
     }
 
     public async Task MaterializeAsync(UserId userId, DateOnly from, DateOnly to, CancellationToken cancellationToken = default)
@@ -33,7 +45,22 @@ public sealed class RecurringTransactionMaterializationService
             return;
         }
 
-        foreach (var month in YearMonth.EnumerateRange(YearMonth.FromDate(from), YearMonth.FromDate(to)))
+        var requestedToMonth = YearMonth.FromDate(to);
+        var latestMaterializableMonth = YearMonth.FromDate(DateOnly.FromDateTime(DateTime.UtcNow)).AddMonths(MaxMonthsAheadToMaterialize);
+
+        var cappedToMonth = requestedToMonth;
+        if (cappedToMonth > latestMaterializableMonth)
+        {
+            cappedToMonth = latestMaterializableMonth;
+            _logger.LogWarning(
+                "Materialization for user {UserId} requested through {RequestedToMonth} but was capped at {CappedToMonth} -- " +
+                "a caller is asking for recurring transactions too far into the future.",
+                userId.Value,
+                requestedToMonth,
+                cappedToMonth);
+        }
+
+        foreach (var month in YearMonth.EnumerateRange(YearMonth.FromDate(from), cappedToMonth))
         {
             foreach (var recurringTransaction in recurringTransactions)
             {

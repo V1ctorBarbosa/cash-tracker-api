@@ -37,6 +37,13 @@ public sealed class RecurringTransaction
 
     public bool Active { get; }
 
+    /// <summary>
+    /// Months explicitly excluded from materialization even though the recurrence would otherwise
+    /// apply -- set when the user deletes a single generated occurrence (Section 12), so it does not
+    /// silently reappear the next time a bounded-range query re-materializes this recurrence.
+    /// </summary>
+    public IReadOnlySet<YearMonth> SkippedMonths { get; }
+
     private RecurringTransaction(
         RecurringTransactionId id,
         UserId userId,
@@ -48,7 +55,8 @@ public sealed class RecurringTransaction
         int dayOfMonth,
         DateOnly startDate,
         DateOnly? endDate,
-        bool active)
+        bool active,
+        IReadOnlySet<YearMonth> skippedMonths)
     {
         Id = id;
         UserId = userId;
@@ -61,6 +69,7 @@ public sealed class RecurringTransaction
         StartDate = startDate;
         EndDate = endDate;
         Active = active;
+        SkippedMonths = skippedMonths;
     }
 
     public static RecurringTransaction Create(
@@ -74,7 +83,8 @@ public sealed class RecurringTransaction
         int dayOfMonth,
         DateOnly startDate,
         DateOnly? endDate,
-        bool active)
+        bool active,
+        IReadOnlyCollection<YearMonth>? skippedMonths = null)
     {
         if (dayOfMonth is < MinDayOfMonth or > MaxDayOfMonth)
         {
@@ -87,17 +97,35 @@ public sealed class RecurringTransaction
         }
 
         var normalizedDescription = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
+        var normalizedSkippedMonths = (IReadOnlySet<YearMonth>)(skippedMonths?.ToHashSet() ?? new HashSet<YearMonth>());
 
-        return new RecurringTransaction(id, userId, type, amount, normalizedDescription, tagId, paymentMethod, dayOfMonth, startDate, endDate, active);
+        return new RecurringTransaction(id, userId, type, amount, normalizedDescription, tagId, paymentMethod, dayOfMonth, startDate, endDate, active, normalizedSkippedMonths);
+    }
+
+    /// <summary>Returns a copy with the given month added to <see cref="SkippedMonths"/> -- a no-op if it's already skipped.</summary>
+    public RecurringTransaction SkipMonth(YearMonth month)
+    {
+        if (SkippedMonths.Contains(month))
+        {
+            return this;
+        }
+
+        var updatedSkippedMonths = (IReadOnlySet<YearMonth>)new HashSet<YearMonth>(SkippedMonths) { month };
+        return new RecurringTransaction(Id, UserId, Type, Amount, Description, TagId, PaymentMethod, DayOfMonth, StartDate, EndDate, Active, updatedSkippedMonths);
     }
 
     /// <summary>
     /// Whether this recurrence is due to generate a transaction for the given month -- active,
-    /// and the month falls within [StartDate, EndDate].
+    /// not explicitly skipped, and the month falls within [StartDate, EndDate].
     /// </summary>
     public bool AppliesToMonth(YearMonth month)
     {
         if (!Active)
+        {
+            return false;
+        }
+
+        if (SkippedMonths.Contains(month))
         {
             return false;
         }

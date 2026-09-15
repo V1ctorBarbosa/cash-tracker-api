@@ -68,7 +68,8 @@ public sealed class RecurringTransactionService
             request.DayOfMonth,
             request.StartDate,
             request.EndDate,
-            request.Active);
+            request.Active,
+            existingRecurringTransaction.SkippedMonths);
 
         await _recurringTransactionRepository.SaveAsync(updatedRecurringTransaction, cancellationToken);
         return ToDto(updatedRecurringTransaction);
@@ -84,6 +85,24 @@ public sealed class RecurringTransactionService
 
         await _recurringTransactionRepository.DeleteAsync(userId, recurringTransactionId, cancellationToken);
         return true;
+    }
+
+    /// <summary>
+    /// Marks a single month as explicitly excluded from materialization, so a deleted occurrence
+    /// does not silently reappear the next time a bounded-range query re-materializes this recurrence.
+    /// A no-op (not an error) when the recurrence no longer exists -- deleting its last remaining
+    /// materialized occurrence is a valid, harmless race with deleting the recurrence itself.
+    /// </summary>
+    public async Task SkipMonthAsync(UserId userId, RecurringTransactionId recurringTransactionId, YearMonth month, CancellationToken cancellationToken = default)
+    {
+        var existingRecurringTransaction = await _recurringTransactionRepository.GetByIdAsync(userId, recurringTransactionId, cancellationToken);
+        if (existingRecurringTransaction is null)
+        {
+            return;
+        }
+
+        var updatedRecurringTransaction = existingRecurringTransaction.SkipMonth(month);
+        await _recurringTransactionRepository.SaveAsync(updatedRecurringTransaction, cancellationToken);
     }
 
     private static RecurringTransactionDto ToDto(RecurringTransaction recurringTransaction) => new(
