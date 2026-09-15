@@ -53,7 +53,7 @@ public sealed class RecurringTransactionMaterializationService
                 }
 
                 var transaction = Transaction.Create(
-                    new TransactionId(Guid.NewGuid().ToString()),
+                    TransactionId.ForRecurring(recurringTransaction.Id, month),
                     userId,
                     recurringTransaction.Type,
                     recurringTransaction.Amount,

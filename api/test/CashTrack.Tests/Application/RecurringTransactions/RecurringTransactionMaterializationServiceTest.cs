@@ -111,6 +111,28 @@ public sealed class RecurringTransactionMaterializationServiceTest
     }
 
     [Fact]
+    public async Task MaterializeAsync_UsesADeterministicTransactionId_DerivedFromTheRecurringTransactionAndMonth()
+    {
+        // Arrange -- a random id would let two concurrent materialization calls (e.g. the
+        // dashboard's month and trailing-range queries firing together) each write their own
+        // transaction for the same (recurring, month) pair, double-counting the amount.
+        var recurringTransaction = CreateValidRecurringTransaction(dayOfMonth: 5);
+        _recurringTransactionRepository.ListByUserAsync(_userId, Arg.Any<CancellationToken>()).Returns([recurringTransaction]);
+        _transactionRepository
+            .ExistsForRecurringTransactionAsync(_userId, recurringTransaction.Id, new YearMonth(2026, 9), Arg.Any<CancellationToken>())
+            .Returns(false);
+
+        // Act
+        await _sut.MaterializeAsync(_userId, new DateOnly(2026, 9, 1), new DateOnly(2026, 9, 30));
+
+        // Assert
+        var expectedId = TransactionId.ForRecurring(recurringTransaction.Id, new YearMonth(2026, 9));
+        await _transactionRepository.Received(1).SaveAsync(
+            Arg.Is<Transaction>(transaction => transaction.Id == expectedId),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task MaterializeAsync_GeneratesOneTransactionPerApplicableMonth_InAMultiMonthRange()
     {
         // Arrange
