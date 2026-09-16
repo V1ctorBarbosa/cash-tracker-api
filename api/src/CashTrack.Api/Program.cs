@@ -41,7 +41,16 @@ if (app.Environment.IsDevelopment())
     app.UseCors(DevelopmentCorsPolicyName);
 }
 
-app.UseHttpsRedirection();
+// Skipped in Development: it would force every plain-HTTP request (including the native app's,
+// which deliberately calls HTTP directly -- see shared/config/api-config.ts) onto the HTTPS
+// endpoint, which serves the ASP.NET Core self-signed dev certificate. Desktop browsers/emulators
+// often trust that certificate via `dotnet dev-certs https --trust`, but a real Android device
+// never does, so every redirected request fails TLS validation.
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
+
 app.UseExceptionHandler();
 app.UseAuthentication();
 app.UseAuthorization();
