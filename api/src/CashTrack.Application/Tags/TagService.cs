@@ -18,7 +18,7 @@ public sealed class TagService
 
     public async Task<IReadOnlyList<TagDto>> ListAsync(UserId userId, CancellationToken cancellationToken = default)
     {
-        var tags = await _tagRepository.ListByUserAsync(userId, cancellationToken);
+        var tags = await EnsureUncategorizedTagsExistAsync(userId, cancellationToken);
         return tags.Select(ToDto).ToList();
     }
 
@@ -47,6 +47,11 @@ public sealed class TagService
             return null;
         }
 
+        if (existingTag.IsSystemDefined)
+        {
+            throw new ArgumentException("The uncategorized tag cannot be edited.", nameof(tagId));
+        }
+
         var updatedTag = Tag.Create(
             tagId,
             userId,
@@ -66,10 +71,39 @@ public sealed class TagService
             return false;
         }
 
+        if (existingTag.IsSystemDefined)
+        {
+            throw new ArgumentException("The uncategorized tag cannot be deleted.", nameof(tagId));
+        }
+
         await _tagRepository.DeleteAsync(userId, tagId, cancellationToken);
         await _budgetService.DeleteAllForTagAsync(userId, tagId, cancellationToken);
         return true;
     }
 
-    private static TagDto ToDto(Tag tag) => new(tag.Id.Value, tag.Name, tag.Color.Value, tag.Kind.ToString());
+    /// <summary>Lazily provisions the user's "uncategorized" tag for each transaction kind that doesn't have one yet, mirroring RecurringTransactionMaterializationService's check-then-create-if-missing pattern (Section 12) -- a deterministic id makes re-creation after deletion harmless.</summary>
+    private async Task<IReadOnlyList<Tag>> EnsureUncategorizedTagsExistAsync(UserId userId, CancellationToken cancellationToken)
+    {
+        var tags = await _tagRepository.ListByUserAsync(userId, cancellationToken);
+        var kindsWithAnUncategorizedTag = tags.Where(tag => tag.IsSystemDefined).Select(tag => tag.Kind).ToHashSet();
+
+        var missingUncategorizedTags = Enum.GetValues<TransactionType>()
+            .Where(kind => !kindsWithAnUncategorizedTag.Contains(kind))
+            .Select(kind => Tag.CreateUncategorized(userId, kind))
+            .ToList();
+
+        if (missingUncategorizedTags.Count == 0)
+        {
+            return tags;
+        }
+
+        foreach (var uncategorizedTag in missingUncategorizedTags)
+        {
+            await _tagRepository.SaveAsync(uncategorizedTag, cancellationToken);
+        }
+
+        return [.. tags, .. missingUncategorizedTags];
+    }
+
+    private static TagDto ToDto(Tag tag) => new(tag.Id.Value, tag.Name, tag.Color.Value, tag.Kind.ToString(), tag.IsSystemDefined);
 }

@@ -46,5 +46,41 @@ public sealed class TagDocumentMapperTest
         roundTrippedTag.Name.Should().Be(originalTag.Name);
         roundTrippedTag.Color.Should().Be(originalTag.Color);
         roundTrippedTag.Kind.Should().Be(originalTag.Kind);
+        roundTrippedTag.IsSystemDefined.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ToDocument_MapsIsSystemDefined_ForAnUncategorizedTag()
+    {
+        // Arrange
+        var userId = new UserId("firebase-uid-123");
+        var tag = Tag.CreateUncategorized(userId, TransactionType.Expense);
+
+        // Act
+        var document = TagDocumentMapper.ToDocument(tag);
+
+        // Assert
+        document.IsSystemDefined.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ToDomain_RoundTrips_ThroughToDocument_ForAnUncategorizedTag()
+    {
+        // Arrange -- name/color/id are regenerated from code, not trusted from storage, so the
+        // stored document intentionally carries different values than what should come back out.
+        var userId = new UserId("firebase-uid-123");
+        var id = TagId.ForUncategorized(userId, TransactionType.Expense);
+        var originalTag = Tag.CreateUncategorized(userId, TransactionType.Expense);
+
+        // Act
+        var document = TagDocumentMapper.ToDocument(originalTag);
+        var roundTrippedTag = TagDocumentMapper.ToDomain(id, document);
+
+        // Assert
+        roundTrippedTag.Id.Should().Be(id);
+        roundTrippedTag.Name.Should().Be(originalTag.Name);
+        roundTrippedTag.Color.Should().Be(originalTag.Color);
+        roundTrippedTag.Kind.Should().Be(TransactionType.Expense);
+        roundTrippedTag.IsSystemDefined.Should().BeTrue();
     }
 }

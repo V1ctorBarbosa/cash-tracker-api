@@ -30,19 +30,57 @@ public sealed class TagServiceTest
     [Fact]
     public async Task ListAsync_ReturnsMappedDtos_FromRepository()
     {
-        // Arrange
+        // Arrange -- both system tags already provisioned, so this exercises mapping only
         var tag = Tag.Create(new TagId("tag-mercado"), _userId, "Mercado", new TagColor("#3B82F6"), TransactionType.Expense);
-        _tagRepository.ListByUserAsync(_userId, Arg.Any<CancellationToken>()).Returns([tag]);
+        _tagRepository.ListByUserAsync(_userId, Arg.Any<CancellationToken>()).Returns([
+            tag,
+            Tag.CreateUncategorized(_userId, TransactionType.Expense),
+            Tag.CreateUncategorized(_userId, TransactionType.Income),
+        ]);
 
         // Act
         var result = await _sut.ListAsync(_userId);
 
         // Assert
-        result.Should().ContainSingle();
-        result[0].Id.Should().Be("tag-mercado");
-        result[0].Name.Should().Be("Mercado");
-        result[0].Color.Should().Be("#3B82F6");
-        result[0].Kind.Should().Be("Expense");
+        var mercadoDto = result.Single(dto => dto.Id == "tag-mercado");
+        mercadoDto.Name.Should().Be("Mercado");
+        mercadoDto.Color.Should().Be("#3B82F6");
+        mercadoDto.Kind.Should().Be("Expense");
+        mercadoDto.IsSystemDefined.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task ListAsync_ProvisionsBothUncategorizedTags_WhenNeitherExistsYet()
+    {
+        // Arrange
+        _tagRepository.ListByUserAsync(_userId, Arg.Any<CancellationToken>()).Returns([]);
+
+        // Act
+        var result = await _sut.ListAsync(_userId);
+
+        // Assert
+        result.Should().Contain(dto => dto.IsSystemDefined && dto.Kind == "Expense");
+        result.Should().Contain(dto => dto.IsSystemDefined && dto.Kind == "Income");
+        await _tagRepository.Received(1).SaveAsync(
+            Arg.Is<Tag>(savedTag => savedTag.IsSystemDefined && savedTag.Kind == TransactionType.Expense), Arg.Any<CancellationToken>());
+        await _tagRepository.Received(1).SaveAsync(
+            Arg.Is<Tag>(savedTag => savedTag.IsSystemDefined && savedTag.Kind == TransactionType.Income), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ListAsync_DoesNotReprovision_WhenBothUncategorizedTagsAlreadyExist()
+    {
+        // Arrange
+        _tagRepository.ListByUserAsync(_userId, Arg.Any<CancellationToken>()).Returns([
+            Tag.CreateUncategorized(_userId, TransactionType.Expense),
+            Tag.CreateUncategorized(_userId, TransactionType.Income),
+        ]);
+
+        // Act
+        await _sut.ListAsync(_userId);
+
+        // Assert
+        await _tagRepository.DidNotReceive().SaveAsync(Arg.Any<Tag>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -93,6 +131,36 @@ public sealed class TagServiceTest
         result.Should().NotBeNull();
         result!.Name.Should().Be("Supermercado");
         result.Color.Should().Be("#EF4444");
+    }
+
+    [Fact]
+    public async Task UpdateAsync_Throws_WhenTagIsSystemDefined()
+    {
+        // Arrange
+        var tagId = TagId.ForUncategorized(_userId, TransactionType.Expense);
+        _tagRepository.GetByIdAsync(_userId, tagId, Arg.Any<CancellationToken>()).Returns(Tag.CreateUncategorized(_userId, TransactionType.Expense));
+
+        // Act
+        var act = async () => await _sut.UpdateAsync(_userId, tagId, new UpdateTagRequest("Novo nome", "#3B82F6", "Expense"));
+
+        // Assert
+        await act.Should().ThrowAsync<ArgumentException>();
+        await _tagRepository.DidNotReceive().SaveAsync(Arg.Any<Tag>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task DeleteAsync_Throws_WhenTagIsSystemDefined()
+    {
+        // Arrange
+        var tagId = TagId.ForUncategorized(_userId, TransactionType.Expense);
+        _tagRepository.GetByIdAsync(_userId, tagId, Arg.Any<CancellationToken>()).Returns(Tag.CreateUncategorized(_userId, TransactionType.Expense));
+
+        // Act
+        var act = async () => await _sut.DeleteAsync(_userId, tagId);
+
+        // Assert
+        await act.Should().ThrowAsync<ArgumentException>();
+        await _tagRepository.DidNotReceive().DeleteAsync(Arg.Any<UserId>(), Arg.Any<TagId>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]

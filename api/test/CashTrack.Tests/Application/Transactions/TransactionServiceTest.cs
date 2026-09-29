@@ -1,4 +1,5 @@
 using CashTrack.Application.RecurringTransactions;
+using CashTrack.Application.Tags;
 using CashTrack.Application.Transactions;
 using CashTrack.Domain.Common;
 using CashTrack.Domain.RecurringTransactions;
@@ -15,6 +16,7 @@ public sealed class TransactionServiceTest
 {
     private readonly ITransactionRepository _transactionRepository = Substitute.For<ITransactionRepository>();
     private readonly IRecurringTransactionRepository _recurringTransactionRepository = Substitute.For<IRecurringTransactionRepository>();
+    private readonly ITagRepository _tagRepository = Substitute.For<ITagRepository>();
     private readonly TransactionService _sut;
     private readonly UserId _userId = new("firebase-uid-123");
 
@@ -29,9 +31,9 @@ public sealed class TransactionServiceTest
             _recurringTransactionRepository,
             _transactionRepository,
             NullLogger<RecurringTransactionMaterializationService>.Instance);
-        var recurringTransactionService = new RecurringTransactionService(_recurringTransactionRepository);
+        var recurringTransactionService = new RecurringTransactionService(_recurringTransactionRepository, _tagRepository);
 
-        _sut = new TransactionService(_transactionRepository, materializationService, recurringTransactionService);
+        _sut = new TransactionService(_transactionRepository, _tagRepository, materializationService, recurringTransactionService);
     }
 
     [Fact]
@@ -115,6 +117,37 @@ public sealed class TransactionServiceTest
     }
 
     [Fact]
+    public async Task CreateAsync_Throws_WhenTagIsUncategorized_AndDescriptionIsMissing()
+    {
+        // Arrange
+        var tagId = new TagId("tag-uncategorized");
+        _tagRepository.GetByIdAsync(_userId, tagId, Arg.Any<CancellationToken>()).Returns(Tag.CreateUncategorized(_userId, TransactionType.Expense));
+        var request = new CreateTransactionRequest("Expense", 89.90m, new DateOnly(2026, 9, 10), null, "tag-uncategorized", "CartaoDebito");
+
+        // Act
+        var act = async () => await _sut.CreateAsync(_userId, request);
+
+        // Assert
+        await act.Should().ThrowAsync<ArgumentException>();
+        await _transactionRepository.DidNotReceive().SaveAsync(Arg.Any<Transaction>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CreateAsync_Succeeds_WhenTagIsUncategorized_AndDescriptionIsProvided()
+    {
+        // Arrange
+        var tagId = new TagId("tag-uncategorized");
+        _tagRepository.GetByIdAsync(_userId, tagId, Arg.Any<CancellationToken>()).Returns(Tag.CreateUncategorized(_userId, TransactionType.Expense));
+        var request = new CreateTransactionRequest("Expense", 89.90m, new DateOnly(2026, 9, 10), "Peça avulsa", "tag-uncategorized", "CartaoDebito");
+
+        // Act
+        var result = await _sut.CreateAsync(_userId, request);
+
+        // Assert
+        result.Description.Should().Be("Peça avulsa");
+    }
+
+    [Fact]
     public async Task UpdateAsync_ReturnsNull_WhenTransactionDoesNotBelongToUser()
     {
         // Arrange
@@ -150,6 +183,24 @@ public sealed class TransactionServiceTest
         await _transactionRepository.Received(1).SaveAsync(
             Arg.Is<Transaction>(transaction => transaction.CreatedAt == existingTransaction.CreatedAt),
             Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task UpdateAsync_Throws_WhenTagIsUncategorized_AndDescriptionIsMissing()
+    {
+        // Arrange
+        var transactionId = new TransactionId("transaction-1");
+        _transactionRepository.GetByIdAsync(_userId, transactionId, Arg.Any<CancellationToken>()).Returns(CreateValidTransaction());
+        var tagId = new TagId("tag-uncategorized");
+        _tagRepository.GetByIdAsync(_userId, tagId, Arg.Any<CancellationToken>()).Returns(Tag.CreateUncategorized(_userId, TransactionType.Expense));
+        var request = new UpdateTransactionRequest("Expense", 89.90m, new DateOnly(2026, 9, 10), null, "tag-uncategorized", "CartaoDebito");
+
+        // Act
+        var act = async () => await _sut.UpdateAsync(_userId, transactionId, request);
+
+        // Assert
+        await act.Should().ThrowAsync<ArgumentException>();
+        await _transactionRepository.DidNotReceive().SaveAsync(Arg.Any<Transaction>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]

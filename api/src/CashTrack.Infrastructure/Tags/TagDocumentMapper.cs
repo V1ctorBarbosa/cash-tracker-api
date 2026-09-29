@@ -10,12 +10,17 @@ namespace CashTrack.Infrastructure.Tags;
 /// </summary>
 internal static class TagDocumentMapper
 {
-    public static Tag ToDomain(TagId id, TagDocument document) => Tag.Create(
-        id,
-        new UserId(document.UserId),
-        document.Name,
-        new TagColor(document.Color),
-        Enum.Parse<TransactionType>(document.Kind));
+    public static Tag ToDomain(TagId id, TagDocument document)
+    {
+        var kind = Enum.Parse<TransactionType>(document.Kind);
+
+        if (document.IsSystemDefined)
+        {
+            return Tag.CreateUncategorized(new UserId(document.UserId), kind);
+        }
+
+        return Tag.Create(id, new UserId(document.UserId), document.Name, new TagColor(document.Color), kind);
+    }
 
     public static TagDocument ToDocument(Tag tag) => new()
     {
@@ -23,5 +28,6 @@ internal static class TagDocumentMapper
         Name = tag.Name,
         Color = tag.Color.Value,
         Kind = tag.Kind.ToString(),
+        IsSystemDefined = tag.IsSystemDefined,
     };
 }

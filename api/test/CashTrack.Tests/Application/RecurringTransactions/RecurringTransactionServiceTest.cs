@@ -1,4 +1,5 @@
 using CashTrack.Application.RecurringTransactions;
+using CashTrack.Application.Tags;
 using CashTrack.Domain.Common;
 using CashTrack.Domain.RecurringTransactions;
 using CashTrack.Domain.Tags;
@@ -12,12 +13,13 @@ namespace CashTrack.Tests.Application.RecurringTransactions;
 public sealed class RecurringTransactionServiceTest
 {
     private readonly IRecurringTransactionRepository _recurringTransactionRepository = Substitute.For<IRecurringTransactionRepository>();
+    private readonly ITagRepository _tagRepository = Substitute.For<ITagRepository>();
     private readonly RecurringTransactionService _sut;
     private readonly UserId _userId = new("firebase-uid-123");
 
     public RecurringTransactionServiceTest()
     {
-        _sut = new RecurringTransactionService(_recurringTransactionRepository);
+        _sut = new RecurringTransactionService(_recurringTransactionRepository, _tagRepository);
     }
 
     [Fact]
@@ -55,6 +57,23 @@ public sealed class RecurringTransactionServiceTest
     }
 
     [Fact]
+    public async Task CreateAsync_Throws_WhenTagIsUncategorized_AndDescriptionIsMissing()
+    {
+        // Arrange
+        var tagId = new TagId("tag-uncategorized");
+        _tagRepository.GetByIdAsync(_userId, tagId, Arg.Any<CancellationToken>()).Returns(Tag.CreateUncategorized(_userId, TransactionType.Expense));
+        var request = new CreateRecurringTransactionRequest(
+            "Expense", 1800.00m, null, "tag-uncategorized", "TransferenciaBancaria", 5, new DateOnly(2026, 1, 1), null);
+
+        // Act
+        var act = async () => await _sut.CreateAsync(_userId, request);
+
+        // Assert
+        await act.Should().ThrowAsync<ArgumentException>();
+        await _recurringTransactionRepository.DidNotReceive().SaveAsync(Arg.Any<RecurringTransaction>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task UpdateAsync_ReturnsNull_WhenRecurringTransactionDoesNotBelongToUser()
     {
         // Arrange
@@ -86,6 +105,25 @@ public sealed class RecurringTransactionServiceTest
         // Assert
         result.Should().NotBeNull();
         result!.Active.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task UpdateAsync_Throws_WhenTagIsUncategorized_AndDescriptionIsMissing()
+    {
+        // Arrange
+        var id = new RecurringTransactionId("recurring-1");
+        _recurringTransactionRepository.GetByIdAsync(_userId, id, Arg.Any<CancellationToken>()).Returns(CreateValidRecurringTransaction());
+        var tagId = new TagId("tag-uncategorized");
+        _tagRepository.GetByIdAsync(_userId, tagId, Arg.Any<CancellationToken>()).Returns(Tag.CreateUncategorized(_userId, TransactionType.Expense));
+        var request = new UpdateRecurringTransactionRequest(
+            "Expense", 1800.00m, null, "tag-uncategorized", "TransferenciaBancaria", 5, new DateOnly(2026, 1, 1), null, true);
+
+        // Act
+        var act = async () => await _sut.UpdateAsync(_userId, id, request);
+
+        // Assert
+        await act.Should().ThrowAsync<ArgumentException>();
+        await _recurringTransactionRepository.DidNotReceive().SaveAsync(Arg.Any<RecurringTransaction>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
