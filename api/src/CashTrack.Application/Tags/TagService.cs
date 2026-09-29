@@ -1,4 +1,5 @@
 using CashTrack.Application.Budgets;
+using CashTrack.Domain.Common;
 using CashTrack.Domain.Tags;
 using CashTrack.Domain.Transactions;
 using CashTrack.Domain.Users;
@@ -25,7 +26,7 @@ public sealed class TagService
     public async Task<TagDto> CreateAsync(UserId userId, CreateTagRequest request, CancellationToken cancellationToken = default)
     {
         var tag = Tag.Create(
-            new TagId(Guid.NewGuid().ToString()),
+            new TagId(NewEntityId.Generate()),
             userId,
             request.Name,
             new TagColor(request.Color),

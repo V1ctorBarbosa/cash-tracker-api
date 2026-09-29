@@ -65,7 +65,7 @@ public sealed class TransactionService
         await EnsureDescriptionIsProvidedForUncategorizedTagAsync(userId, tagId, request.Description, cancellationToken);
 
         var transaction = Transaction.Create(
-            new TransactionId(Guid.NewGuid().ToString()),
+            new TransactionId(NewEntityId.Generate()),
             userId,
             Enum.Parse<TransactionType>(request.Type, ignoreCase: true),
             new Money(request.Amount),

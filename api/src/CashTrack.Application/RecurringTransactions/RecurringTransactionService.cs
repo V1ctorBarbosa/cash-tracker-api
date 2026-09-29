@@ -35,7 +35,7 @@ public sealed class RecurringTransactionService
         await EnsureDescriptionIsProvidedForUncategorizedTagAsync(userId, tagId, request.Description, cancellationToken);
 
         var recurringTransaction = RecurringTransaction.Create(
-            new RecurringTransactionId(Guid.NewGuid().ToString()),
+            new RecurringTransactionId(NewEntityId.Generate()),
             userId,
             Enum.Parse<TransactionType>(request.Type, ignoreCase: true),
             new Money(request.Amount),
