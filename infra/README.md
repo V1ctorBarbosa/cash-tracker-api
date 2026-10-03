@@ -20,11 +20,13 @@ region default stays `us-east-2`.
 
 ### 1. Terraform Cloud (free, no card)
 
-1. Create an organization named `cash-track` at [app.terraform.io](https://app.terraform.io)
-   (or rename `organization` in both `main.tf` files to match the one you use).
-2. Create two workspaces in it: `cash-track-api-bootstrap` and `cash-track-api`, both with the
-   **CLI-Driven Workflow**. Terraform runs on your machine and in GitHub Actions; Terraform Cloud
-   only stores state.
+1. Use the `v1ctorbarbosa` organization at [app.terraform.io](https://app.terraform.io), shared
+   with the `food-track` workspaces (or rename `organization` in both `main.tf` files to match the
+   one you use). Setting *Organization settings → General → Default execution mode* to **Local**
+   makes new workspaces start in the right mode.
+2. The two workspaces, `cash-track-api-bootstrap` and `cash-track-api`, are created by the first
+   `terraform init` as **CLI-Driven** workspaces (or create them by hand). Terraform runs on your
+   machine and in GitHub Actions; Terraform Cloud only stores state.
 3. On both workspaces, *Settings → General → Execution mode → Local*. In this mode workspace
    variables set in the Terraform Cloud UI are ignored, so the app config's inputs come from the
    GitHub secrets below.
