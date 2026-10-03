@@ -1,0 +1,71 @@
+name: Deploy API
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "api/**"
+      - "infra/terraform/app/**"
+      - ".github/workflows/deploy-api.yml"
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: us-east-2
+  LAMBDA_ZIP_PATH: ${{ github.workspace }}/publish/function.zip
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      # A broken build or a failing test never reaches AWS.
+      - run: dotnet test api/CashTrack.slnx --configuration Release
+
+      - run: dotnet tool install -g Amazon.Lambda.Tools
+
+      - name: Package the Lambda function
+        run: |
+          dotnet lambda package \
+            --project-location api/src/CashTrack.Api \
+            --configuration Release \
+            --output-package "$LAMBDA_ZIP_PATH" \
+            --disable-interactive true
+
+      # Static keys for a narrowly-scoped IAM user, not OIDC: the account's Free Plan blocks
+      # creating an OIDC provider. See infra/terraform/bootstrap/oidc.tf.
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+
+      # The workspace runs in Local execution mode, so Terraform Cloud workspace variables are
+      # ignored; inputs must come from here, and TF_INPUT=false makes a missing one fail instead of
+      # waiting forever for a prompt nobody can answer.
+      - name: Terraform apply
+        working-directory: infra/terraform/app
+        env:
+          TF_INPUT: "false"
+          TF_VAR_firebase_credentials_json: ${{ secrets.FIREBASE_CREDENTIALS_JSON }}
+          TF_VAR_lambda_execution_role_arn: ${{ secrets.LAMBDA_EXECUTION_ROLE_ARN }}
+        run: |
+          terraform init
+          terraform apply -auto-approve -var="lambda_zip_path=$LAMBDA_ZIP_PATH"
+
+      - name: Smoke test
+        working-directory: infra/terraform/app
+        run: |
+          function_url=$(terraform output -raw function_url)
+          curl --fail --retry 5 --retry-delay 5 "${function_url}health"

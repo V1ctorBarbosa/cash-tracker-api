@@ -47,5 +47,17 @@ public sealed class BudgetService
         return true;
     }
 
+    /// <summary>Deletes every budget set for this tag, across every month -- called when the tag itself is deleted, so no budget is left pointing at a tag that no longer exists.</summary>
+    public async Task DeleteAllForTagAsync(UserId userId, TagId tagId, CancellationToken cancellationToken = default)
+    {
+        var budgets = await _budgetRepository.ListByUserAsync(userId, month: null, cancellationToken);
+        var budgetsForTag = budgets.Where(budget => budget.TagId == tagId);
+
+        foreach (var budget in budgetsForTag)
+        {
+            await _budgetRepository.DeleteAsync(userId, budget.Id, cancellationToken);
+        }
+    }
+
     private static BudgetDto ToDto(Budget budget) => new(budget.Id.Value, budget.TagId.Value, budget.Month.ToString(), budget.LimitAmount.Amount);
 }

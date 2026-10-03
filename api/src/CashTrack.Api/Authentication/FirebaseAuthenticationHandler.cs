@@ -38,18 +38,21 @@ public sealed class FirebaseAuthenticationHandler : AuthenticationHandler<Authen
     {
         if (!Request.Headers.TryGetValue("Authorization", out var authorizationHeader))
         {
+            Logger.LogInformation("Rejected {Path}: no Authorization header was sent.", Request.Path);
             return AuthenticateResult.NoResult();
         }
 
         var headerValue = authorizationHeader.ToString();
         if (!headerValue.StartsWith(BearerPrefix, StringComparison.OrdinalIgnoreCase))
         {
+            Logger.LogInformation("Rejected {Path}: Authorization header did not start with 'Bearer '.", Request.Path);
             return AuthenticateResult.NoResult();
         }
 
         var idToken = headerValue[BearerPrefix.Length..].Trim();
         if (string.IsNullOrEmpty(idToken))
         {
+            Logger.LogInformation("Rejected {Path}: bearer token was empty.", Request.Path);
             return AuthenticateResult.Fail("Missing bearer token.");
         }
 

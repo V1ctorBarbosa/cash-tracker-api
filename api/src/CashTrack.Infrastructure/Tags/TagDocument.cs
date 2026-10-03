@@ -16,4 +16,7 @@ internal sealed class TagDocument
 
     [FirestoreProperty]
     public string Kind { get; set; } = string.Empty;
+
+    [FirestoreProperty]
+    public bool IsSystemDefined { get; set; }
 }

@@ -9,6 +9,7 @@ using CashTrack.Domain.Tags;
 using CashTrack.Domain.Transactions;
 using CashTrack.Domain.Users;
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using Transaction = CashTrack.Domain.Transactions.Transaction;
 
@@ -31,7 +32,10 @@ public sealed class DashboardServiceTest
         // No recurring transactions by default, so materialization is a real no-op --
         // RecurringTransactionMaterializationService is sealed and can't be substituted.
         _recurringTransactionRepository.ListByUserAsync(_userId, Arg.Any<CancellationToken>()).Returns([]);
-        var materializationService = new RecurringTransactionMaterializationService(_recurringTransactionRepository, _transactionRepository);
+        var materializationService = new RecurringTransactionMaterializationService(
+            _recurringTransactionRepository,
+            _transactionRepository,
+            NullLogger<RecurringTransactionMaterializationService>.Instance);
 
         _tagRepository.ListByUserAsync(_userId, Arg.Any<CancellationToken>()).Returns([
             Tag.Create(_moradiaTagId, _userId, "Moradia", new TagColor("#000000"), TransactionType.Expense),
@@ -95,13 +99,33 @@ public sealed class DashboardServiceTest
         // Assert -- income is excluded even though it's tagged "Moradia" too
         dashboard.SpendByTag.Should().BeEquivalentTo(
         [
-            new TagAmountDto("tag-moradia", "Moradia", 1800.00m),
-            new TagAmountDto("tag-mercado", "Mercado", 89.90m),
+            new TagAmountDto("tag-moradia", "Moradia", "#000000", 1800.00m),
+            new TagAmountDto("tag-mercado", "Mercado", "#000000", 89.90m),
         ]);
     }
 
     [Fact]
-    public async Task GetAsync_ResolvesTagName_ToRawId_WhenTagNoLongerExists()
+    public async Task GetAsync_ColorsEachTagAmount_ByItsOwnStoredColor_NotByListPosition()
+    {
+        // Arrange -- a chart segment must always reflect the tag's real, user-assigned color
+        _tagRepository.ListByUserAsync(_userId, Arg.Any<CancellationToken>()).Returns([
+            Tag.Create(_moradiaTagId, _userId, "Moradia", new TagColor("#3B82F6"), TransactionType.Expense),
+            Tag.Create(_mercadoTagId, _userId, "Mercado", new TagColor("#EF4444"), TransactionType.Expense),
+        ]);
+        SetTransactions(
+            CreateTransaction(TransactionType.Expense, 89.90m, new DateOnly(2026, 9, 7), _mercadoTagId, PaymentMethod.CartaoDebito),
+            CreateTransaction(TransactionType.Expense, 1800.00m, new DateOnly(2026, 9, 5), _moradiaTagId, PaymentMethod.TransferenciaBancaria));
+
+        // Act
+        var dashboard = await _sut.GetAsync(_userId, new DateOnly(2026, 9, 1), new DateOnly(2026, 9, 30));
+
+        // Assert
+        dashboard.SpendByTag.Should().Contain(entry => entry.TagId == "tag-moradia" && entry.TagColor == "#3B82F6");
+        dashboard.SpendByTag.Should().Contain(entry => entry.TagId == "tag-mercado" && entry.TagColor == "#EF4444");
+    }
+
+    [Fact]
+    public async Task GetAsync_ResolvesTagName_ToRawId_AndTagColor_ToTheFallback_WhenTagNoLongerExists()
     {
         // Arrange
         var deletedTagId = new TagId("tag-deleted");
@@ -111,7 +135,7 @@ public sealed class DashboardServiceTest
         var dashboard = await _sut.GetAsync(_userId, new DateOnly(2026, 9, 1), new DateOnly(2026, 9, 30));
 
         // Assert
-        dashboard.SpendByTag.Should().ContainSingle(entry => entry.TagId == "tag-deleted" && entry.TagName == "tag-deleted");
+        dashboard.SpendByTag.Should().ContainSingle(entry => entry.TagId == "tag-deleted" && entry.TagName == "tag-deleted" && entry.TagColor == "#B9B3A1");
     }
 
     [Fact]
@@ -150,7 +174,7 @@ public sealed class DashboardServiceTest
 
         // Assert
         dashboard.Budgets.Should().ContainSingle();
-        dashboard.Budgets[0].Should().Be(new BudgetProgressDto("tag-lazer", "Lazer", "2026-09", 500.00m, 45.00m));
+        dashboard.Budgets[0].Should().Be(new BudgetProgressDto("tag-lazer", "Lazer", "#000000", "2026-09", 500.00m, 45.00m));
     }
 
     [Fact]

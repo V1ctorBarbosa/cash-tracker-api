@@ -1,3 +1,4 @@
+using Amazon.Lambda.AspNetCoreServer.Hosting;
 using CashTrack.Api.Authentication;
 using CashTrack.Api.Endpoints;
 using CashTrack.Api.ErrorHandling;
@@ -10,6 +11,10 @@ const string DevelopmentCorsPolicyName = "DevelopmentCors";
 const string ExpoWebDevServerOrigin = "http://localhost:8081";
 
 var builder = WebApplication.CreateBuilder(args);
+
+// A no-op outside Lambda -- Kestrel keeps serving requests exactly as today for local dev.
+// Only takes over when this same executable is actually invoked as a Lambda function.
+builder.Services.AddAWSLambdaHosting(LambdaEventSource.HttpApi);
 
 builder.Services.AddOpenApi();
 builder.Services.AddApplicationServices();
@@ -41,7 +46,16 @@ if (app.Environment.IsDevelopment())
     app.UseCors(DevelopmentCorsPolicyName);
 }
 
-app.UseHttpsRedirection();
+// Skipped in Development: it would force every plain-HTTP request (including the native app's,
+// which deliberately calls HTTP directly -- see shared/config/api-config.ts) onto the HTTPS
+// endpoint, which serves the ASP.NET Core self-signed dev certificate. Desktop browsers/emulators
+// often trust that certificate via `dotnet dev-certs https --trust`, but a real Android device
+// never does, so every redirected request fails TLS validation.
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
+
 app.UseExceptionHandler();
 app.UseAuthentication();
 app.UseAuthorization();

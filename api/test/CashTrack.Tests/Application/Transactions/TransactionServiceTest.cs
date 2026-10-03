@@ -1,4 +1,5 @@
 using CashTrack.Application.RecurringTransactions;
+using CashTrack.Application.Tags;
 using CashTrack.Application.Transactions;
 using CashTrack.Domain.Common;
 using CashTrack.Domain.RecurringTransactions;
@@ -6,6 +7,7 @@ using CashTrack.Domain.Tags;
 using CashTrack.Domain.Transactions;
 using CashTrack.Domain.Users;
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 
 namespace CashTrack.Tests.Application.Transactions;
@@ -14,6 +16,7 @@ public sealed class TransactionServiceTest
 {
     private readonly ITransactionRepository _transactionRepository = Substitute.For<ITransactionRepository>();
     private readonly IRecurringTransactionRepository _recurringTransactionRepository = Substitute.For<IRecurringTransactionRepository>();
+    private readonly ITagRepository _tagRepository = Substitute.For<ITagRepository>();
     private readonly TransactionService _sut;
     private readonly UserId _userId = new("firebase-uid-123");
 
@@ -21,11 +24,16 @@ public sealed class TransactionServiceTest
     {
         // No recurring transactions by default, so materialization (triggered whenever
         // ListAsync is given a bounded range) is a real no-op instead of a mocked one --
-        // RecurringTransactionMaterializationService is sealed and can't be substituted.
+        // RecurringTransactionMaterializationService and RecurringTransactionService are both
+        // sealed and can't be substituted.
         _recurringTransactionRepository.ListByUserAsync(_userId, Arg.Any<CancellationToken>()).Returns([]);
-        var materializationService = new RecurringTransactionMaterializationService(_recurringTransactionRepository, _transactionRepository);
+        var materializationService = new RecurringTransactionMaterializationService(
+            _recurringTransactionRepository,
+            _transactionRepository,
+            NullLogger<RecurringTransactionMaterializationService>.Instance);
+        var recurringTransactionService = new RecurringTransactionService(_recurringTransactionRepository, _tagRepository);
 
-        _sut = new TransactionService(_transactionRepository, materializationService);
+        _sut = new TransactionService(_transactionRepository, _tagRepository, materializationService, recurringTransactionService);
     }
 
     [Fact]
@@ -109,6 +117,37 @@ public sealed class TransactionServiceTest
     }
 
     [Fact]
+    public async Task CreateAsync_Throws_WhenTagIsUncategorized_AndDescriptionIsMissing()
+    {
+        // Arrange
+        var tagId = new TagId("tag-uncategorized");
+        _tagRepository.GetByIdAsync(_userId, tagId, Arg.Any<CancellationToken>()).Returns(Tag.CreateUncategorized(_userId, TransactionType.Expense));
+        var request = new CreateTransactionRequest("Expense", 89.90m, new DateOnly(2026, 9, 10), null, "tag-uncategorized", "CartaoDebito");
+
+        // Act
+        var act = async () => await _sut.CreateAsync(_userId, request);
+
+        // Assert
+        await act.Should().ThrowAsync<ArgumentException>();
+        await _transactionRepository.DidNotReceive().SaveAsync(Arg.Any<Transaction>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CreateAsync_Succeeds_WhenTagIsUncategorized_AndDescriptionIsProvided()
+    {
+        // Arrange
+        var tagId = new TagId("tag-uncategorized");
+        _tagRepository.GetByIdAsync(_userId, tagId, Arg.Any<CancellationToken>()).Returns(Tag.CreateUncategorized(_userId, TransactionType.Expense));
+        var request = new CreateTransactionRequest("Expense", 89.90m, new DateOnly(2026, 9, 10), "Peça avulsa", "tag-uncategorized", "CartaoDebito");
+
+        // Act
+        var result = await _sut.CreateAsync(_userId, request);
+
+        // Assert
+        result.Description.Should().Be("Peça avulsa");
+    }
+
+    [Fact]
     public async Task UpdateAsync_ReturnsNull_WhenTransactionDoesNotBelongToUser()
     {
         // Arrange
@@ -147,6 +186,24 @@ public sealed class TransactionServiceTest
     }
 
     [Fact]
+    public async Task UpdateAsync_Throws_WhenTagIsUncategorized_AndDescriptionIsMissing()
+    {
+        // Arrange
+        var transactionId = new TransactionId("transaction-1");
+        _transactionRepository.GetByIdAsync(_userId, transactionId, Arg.Any<CancellationToken>()).Returns(CreateValidTransaction());
+        var tagId = new TagId("tag-uncategorized");
+        _tagRepository.GetByIdAsync(_userId, tagId, Arg.Any<CancellationToken>()).Returns(Tag.CreateUncategorized(_userId, TransactionType.Expense));
+        var request = new UpdateTransactionRequest("Expense", 89.90m, new DateOnly(2026, 9, 10), null, "tag-uncategorized", "CartaoDebito");
+
+        // Act
+        var act = async () => await _sut.UpdateAsync(_userId, transactionId, request);
+
+        // Assert
+        await act.Should().ThrowAsync<ArgumentException>();
+        await _transactionRepository.DidNotReceive().SaveAsync(Arg.Any<Transaction>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task DeleteAsync_ReturnsFalse_WhenTransactionDoesNotBelongToUser()
     {
         // Arrange
@@ -175,6 +232,65 @@ public sealed class TransactionServiceTest
         // Assert
         result.Should().BeTrue();
         await _transactionRepository.Received(1).DeleteAsync(_userId, transactionId, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task DeleteAsync_DoesNotTouchAnyRecurringDefinition_WhenTheTransactionIsNotRecurring()
+    {
+        // Arrange
+        var transactionId = new TransactionId("transaction-1");
+        var existingTransaction = CreateValidTransaction();
+        _transactionRepository.GetByIdAsync(_userId, transactionId, Arg.Any<CancellationToken>()).Returns(existingTransaction);
+
+        // Act
+        await _sut.DeleteAsync(_userId, transactionId);
+
+        // Assert
+        await _recurringTransactionRepository.DidNotReceive().SaveAsync(Arg.Any<RecurringTransaction>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task DeleteAsync_SkipsTheMonthOnTheRecurringDefinition_WhenTheTransactionWasMaterializedFromOne()
+    {
+        // Arrange
+        var transactionId = new TransactionId("transaction-1");
+        var recurringTransactionId = new RecurringTransactionId("recurring-1");
+        var existingTransaction = Transaction.Create(
+            transactionId,
+            _userId,
+            TransactionType.Income,
+            new Money(5200.00m),
+            new DateOnly(2026, 9, 10),
+            "Salário",
+            new TagId("tag-salario"),
+            PaymentMethod.Pix,
+            DateTimeOffset.UtcNow,
+            recurringTransactionId);
+        _transactionRepository.GetByIdAsync(_userId, transactionId, Arg.Any<CancellationToken>()).Returns(existingTransaction);
+
+        var existingRecurringTransaction = RecurringTransaction.Create(
+            recurringTransactionId,
+            _userId,
+            TransactionType.Income,
+            new Money(5200.00m),
+            "Salário",
+            new TagId("tag-salario"),
+            PaymentMethod.Pix,
+            10,
+            new DateOnly(2026, 1, 1),
+            null,
+            active: true);
+        _recurringTransactionRepository
+            .GetByIdAsync(_userId, recurringTransactionId, Arg.Any<CancellationToken>())
+            .Returns(existingRecurringTransaction);
+
+        // Act
+        await _sut.DeleteAsync(_userId, transactionId);
+
+        // Assert
+        await _recurringTransactionRepository.Received(1).SaveAsync(
+            Arg.Is<RecurringTransaction>(recurringTransaction => recurringTransaction.SkippedMonths.Contains(new YearMonth(2026, 9))),
+            Arg.Any<CancellationToken>());
     }
 
     private Transaction CreateValidTransaction() => Transaction.Create(

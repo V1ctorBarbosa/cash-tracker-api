@@ -6,6 +6,7 @@ using CashTrack.Domain.Tags;
 using CashTrack.Domain.Transactions;
 using CashTrack.Domain.Users;
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using Transaction = CashTrack.Domain.Transactions.Transaction;
 
@@ -20,7 +21,10 @@ public sealed class RecurringTransactionMaterializationServiceTest
 
     public RecurringTransactionMaterializationServiceTest()
     {
-        _sut = new RecurringTransactionMaterializationService(_recurringTransactionRepository, _transactionRepository);
+        _sut = new RecurringTransactionMaterializationService(
+            _recurringTransactionRepository,
+            _transactionRepository,
+            NullLogger<RecurringTransactionMaterializationService>.Instance);
     }
 
     [Fact]
@@ -130,6 +134,46 @@ public sealed class RecurringTransactionMaterializationServiceTest
         await _transactionRepository.Received(1).SaveAsync(
             Arg.Is<Transaction>(transaction => transaction.Id == expectedId),
             Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task MaterializeAsync_DoesNotRecreateATransaction_ForAMonthTheUserExplicitlySkipped()
+    {
+        // Arrange -- e.g. the user deleted the September occurrence; it must not silently
+        // reappear just because a bounded-range query for September ran again.
+        var recurringTransaction = CreateValidRecurringTransaction().SkipMonth(new YearMonth(2026, 9));
+        _recurringTransactionRepository.ListByUserAsync(_userId, Arg.Any<CancellationToken>()).Returns([recurringTransaction]);
+        _transactionRepository
+            .ExistsForRecurringTransactionAsync(_userId, recurringTransaction.Id, new YearMonth(2026, 9), Arg.Any<CancellationToken>())
+            .Returns(false);
+
+        // Act
+        await _sut.MaterializeAsync(_userId, new DateOnly(2026, 9, 1), new DateOnly(2026, 9, 30));
+
+        // Assert
+        await _transactionRepository.DidNotReceive().SaveAsync(Arg.Any<Transaction>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task MaterializeAsync_CapsMaterialization_AtTwelveMonthsIntoTheFuture()
+    {
+        // Arrange -- a recurrence active indefinitely, requested through a far-future date (e.g.
+        // a caller passing an "all time" upper bound) must not generate years of not-yet-happened
+        // transactions.
+        var recurringTransaction = CreateValidRecurringTransaction();
+        _recurringTransactionRepository.ListByUserAsync(_userId, Arg.Any<CancellationToken>()).Returns([recurringTransaction]);
+        _transactionRepository
+            .ExistsForRecurringTransactionAsync(_userId, recurringTransaction.Id, Arg.Any<YearMonth>(), Arg.Any<CancellationToken>())
+            .Returns(false);
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        // Act -- request through a decade out.
+        await _sut.MaterializeAsync(_userId, today, new DateOnly(today.Year + 10, 12, 31));
+
+        // Assert -- capped at the current month plus twelve, inclusive: 13 months.
+        const int expectedMaterializedMonths = 13;
+        await _transactionRepository.Received(expectedMaterializedMonths).SaveAsync(Arg.Any<Transaction>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]

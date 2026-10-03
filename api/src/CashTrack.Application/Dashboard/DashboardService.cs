@@ -17,6 +17,9 @@ namespace CashTrack.Application.Dashboard;
 /// </summary>
 public sealed class DashboardService
 {
+    /// <summary>Used for a tag id that no longer resolves to a real tag (deleted after being used on a transaction or budget) -- a neutral, already-used-elsewhere shade so a chart never breaks instead of colorless.</summary>
+    private const string DeletedTagFallbackColor = "#B9B3A1";
+
     private readonly ITransactionRepository _transactionRepository;
     private readonly ITagRepository _tagRepository;
     private readonly IBudgetRepository _budgetRepository;
@@ -42,7 +45,7 @@ public sealed class DashboardService
             userId,
             new TransactionQuery(from, to, TagId: null, Type: null, PaymentMethod: null),
             cancellationToken);
-        var tagNamesById = (await _tagRepository.ListByUserAsync(userId, cancellationToken)).ToDictionary(tag => tag.Id, tag => tag.Name);
+        var tagsById = (await _tagRepository.ListByUserAsync(userId, cancellationToken)).ToDictionary(tag => tag.Id);
 
         var totalIncome = SumByType(transactions, TransactionType.Income);
         var totalExpense = SumByType(transactions, TransactionType.Expense);
@@ -52,9 +55,9 @@ public sealed class DashboardService
             totalExpense,
             totalIncome - totalExpense,
             BuildMonthlySummary(transactions, from, to),
-            BuildSpendByTag(transactions, tagNamesById),
+            BuildSpendByTag(transactions, tagsById),
             BuildSpendByPaymentMethod(transactions),
-            await BuildBudgetsAsync(userId, from, to, transactions, tagNamesById, cancellationToken));
+            await BuildBudgetsAsync(userId, from, to, transactions, tagsById, cancellationToken));
     }
 
     private static decimal SumByType(IReadOnlyList<Transaction> transactions, TransactionType type) =>
@@ -73,11 +76,15 @@ public sealed class DashboardService
             .ToList();
     }
 
-    private static IReadOnlyList<TagAmountDto> BuildSpendByTag(IReadOnlyList<Transaction> transactions, IReadOnlyDictionary<TagId, string> tagNamesById) =>
+    private static IReadOnlyList<TagAmountDto> BuildSpendByTag(IReadOnlyList<Transaction> transactions, IReadOnlyDictionary<TagId, Tag> tagsById) =>
         transactions
             .Where(transaction => transaction.Type == TransactionType.Expense)
             .GroupBy(transaction => transaction.TagId)
-            .Select(group => new TagAmountDto(group.Key.Value, ResolveTagName(group.Key, tagNamesById), group.Sum(transaction => transaction.Amount.Amount)))
+            .Select(group => new TagAmountDto(
+                group.Key.Value,
+                ResolveTagName(group.Key, tagsById),
+                ResolveTagColor(group.Key, tagsById),
+                group.Sum(transaction => transaction.Amount.Amount)))
             .ToList();
 
     private static IReadOnlyList<PaymentMethodAmountDto> BuildSpendByPaymentMethod(IReadOnlyList<Transaction> transactions) =>
@@ -93,7 +100,7 @@ public sealed class DashboardService
         DateOnly from,
         DateOnly to,
         IReadOnlyList<Transaction> transactions,
-        IReadOnlyDictionary<TagId, string> tagNamesById,
+        IReadOnlyDictionary<TagId, Tag> tagsById,
         CancellationToken cancellationToken)
     {
         var fromMonth = YearMonth.FromDate(from);
@@ -105,7 +112,8 @@ public sealed class DashboardService
         return budgetsInRange
             .Select(budget => new BudgetProgressDto(
                 budget.TagId.Value,
-                ResolveTagName(budget.TagId, tagNamesById),
+                ResolveTagName(budget.TagId, tagsById),
+                ResolveTagColor(budget.TagId, tagsById),
                 budget.Month.ToString(),
                 budget.LimitAmount.Amount,
                 ActualExpenseForTagAndMonth(transactions, budget.TagId, budget.Month)))
@@ -120,6 +128,10 @@ public sealed class DashboardService
         .Sum(transaction => transaction.Amount.Amount);
 
     /// <summary>Falls back to the raw id when a tag was deleted after being used on a transaction or budget.</summary>
-    private static string ResolveTagName(TagId tagId, IReadOnlyDictionary<TagId, string> tagNamesById) =>
-        tagNamesById.GetValueOrDefault(tagId, tagId.Value);
+    private static string ResolveTagName(TagId tagId, IReadOnlyDictionary<TagId, Tag> tagsById) =>
+        tagsById.TryGetValue(tagId, out var tag) ? tag.Name : tagId.Value;
+
+    /// <summary>Every chart must color a tag by its own real, user-assigned color -- never by list position -- so the same category always looks the same across every chart.</summary>
+    private static string ResolveTagColor(TagId tagId, IReadOnlyDictionary<TagId, Tag> tagsById) =>
+        tagsById.TryGetValue(tagId, out var tag) ? tag.Color.Value : DeletedTagFallbackColor;
 }

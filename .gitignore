@@ -22,6 +22,10 @@ api/**/obj/
 !*.tfvars.example
 crash.log
 crash.*.log
+tfplan
+
+# Lambda build output
+/publish/
 
 # app/ is its own independent git repository (cash-tracker-app on GitHub), nested here only
 # for local convenience -- this repo must never track or touch its contents.
