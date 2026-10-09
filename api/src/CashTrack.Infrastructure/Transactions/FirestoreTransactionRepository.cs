@@ -2,6 +2,7 @@ using System.Globalization;
 using CashTrack.Application.Transactions;
 using CashTrack.Domain.Common;
 using CashTrack.Domain.RecurringTransactions;
+using CashTrack.Domain.Tags;
 using CashTrack.Domain.Transactions;
 using CashTrack.Domain.Users;
 using Google.Cloud.Firestore;
@@ -73,6 +74,36 @@ public sealed class FirestoreTransactionRepository : ITransactionRepository
         return querySnapshot.Documents
             .Select(document => TransactionDocumentMapper.ToDomain(new TransactionId(document.Id), document.ConvertTo<TransactionDocument>()))
             .ToList();
+    }
+
+    /// <summary>A count aggregation, billed at one read per thousand matching index entries rather than one per transaction.</summary>
+    public async Task<int> CountByUserAsync(UserId userId, TagId? tagId, CancellationToken cancellationToken = default)
+    {
+        Query firestoreQuery = _firestoreDb.Collection(CollectionName).WhereEqualTo(UserIdFieldName, userId.Value);
+
+        if (tagId is { } givenTagId)
+        {
+            firestoreQuery = firestoreQuery.WhereEqualTo(TagIdFieldName, givenTagId.Value);
+        }
+
+        var aggregateSnapshot = await firestoreQuery.Count().GetSnapshotAsync(cancellationToken);
+        return checked((int)(aggregateSnapshot.Count ?? 0));
+    }
+
+    public async Task<DateOnly?> FindEarliestDateAsync(UserId userId, CancellationToken cancellationToken = default)
+    {
+        var querySnapshot = await _firestoreDb.Collection(CollectionName)
+            .WhereEqualTo(UserIdFieldName, userId.Value)
+            .OrderBy(DateFieldName)
+            .Limit(1)
+            .GetSnapshotAsync(cancellationToken);
+
+        if (querySnapshot.Count == 0)
+        {
+            return null;
+        }
+
+        return TransactionDocumentMapper.ParseDate(querySnapshot.Documents[0].ConvertTo<TransactionDocument>().Date);
     }
 
     public async Task<Transaction?> GetByIdAsync(UserId userId, TransactionId transactionId, CancellationToken cancellationToken = default)

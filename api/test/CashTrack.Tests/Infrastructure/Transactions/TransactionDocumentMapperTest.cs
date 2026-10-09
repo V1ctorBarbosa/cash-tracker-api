@@ -118,4 +118,14 @@ public sealed class TransactionDocumentMapperTest
         // Assert
         occurrence.Should().BeNull();
     }
+
+    [Fact]
+    public void ParseDate_ReadsTheStoredIsoDate()
+    {
+        // Act
+        var date = TransactionDocumentMapper.ParseDate("2025-11-03");
+
+        // Assert
+        date.Should().Be(new DateOnly(2025, 11, 3));
+    }
 }
