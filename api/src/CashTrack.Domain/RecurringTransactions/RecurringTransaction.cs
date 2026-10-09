@@ -139,6 +139,10 @@ public sealed class RecurringTransaction
         return EndDate is not { } endDate || endDate >= new DateOnly(month.Year, month.Month, 1);
     }
 
+    /// <summary>Every month in [<paramref name="from"/>, <paramref name="to"/>] this recurrence is due to generate a transaction for.</summary>
+    public IEnumerable<YearMonth> MonthsDueBetween(YearMonth from, YearMonth to) =>
+        YearMonth.EnumerateRange(from, to).Where(AppliesToMonth);
+
     /// <summary>
     /// The date a transaction generated for the given month should carry -- <see cref="DayOfMonth"/>,
     /// clamped to that month's last day (e.g. day 31 becomes day 28/29 in February).

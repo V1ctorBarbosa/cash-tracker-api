@@ -33,6 +33,22 @@ internal static class TransactionDocumentMapper
         document.CreatedAt.ToDateTimeOffset(),
         document.RecurringTransactionId is null ? null : new RecurringTransactionId(document.RecurringTransactionId));
 
+    /// <summary>
+    /// Keyed by the month of the transaction's own date, so an occurrence the user has since moved
+    /// to another day of the same month still counts as materialized. Null for a transaction not
+    /// generated from a recurring definition.
+    /// </summary>
+    public static RecurringOccurrence? ToRecurringOccurrence(TransactionDocument document)
+    {
+        if (document.RecurringTransactionId is null)
+        {
+            return null;
+        }
+
+        var date = DateOnly.ParseExact(document.Date, DateFormat, CultureInfo.InvariantCulture);
+        return new RecurringOccurrence(new RecurringTransactionId(document.RecurringTransactionId), YearMonth.FromDate(date));
+    }
+
     public static TransactionDocument ToDocument(Transaction transaction) => new()
     {
         UserId = transaction.UserId.Value,

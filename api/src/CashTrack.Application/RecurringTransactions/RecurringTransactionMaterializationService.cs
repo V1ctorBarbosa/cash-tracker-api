@@ -1,5 +1,6 @@
 using CashTrack.Application.Transactions;
 using CashTrack.Domain.Common;
+using CashTrack.Domain.RecurringTransactions;
 using CashTrack.Domain.Users;
 using Microsoft.Extensions.Logging;
 using Transaction = CashTrack.Domain.Transactions.Transaction;
@@ -45,54 +46,79 @@ public sealed class RecurringTransactionMaterializationService
             return;
         }
 
-        var requestedToMonth = YearMonth.FromDate(to);
-        var latestMaterializableMonth = YearMonth.FromDate(DateOnly.FromDateTime(DateTime.UtcNow)).AddMonths(MaxMonthsAheadToMaterialize);
+        var fromMonth = YearMonth.FromDate(from);
+        var toMonth = CapToLatestMaterializableMonth(userId, YearMonth.FromDate(to));
 
-        var cappedToMonth = requestedToMonth;
-        if (cappedToMonth > latestMaterializableMonth)
+        var dueOccurrences = ListDueOccurrences(recurringTransactions, fromMonth, toMonth);
+        if (dueOccurrences.Count == 0)
         {
-            cappedToMonth = latestMaterializableMonth;
-            _logger.LogWarning(
-                "Materialization for user {UserId} requested through {RequestedToMonth} but was capped at {CappedToMonth} -- " +
-                "a caller is asking for recurring transactions too far into the future.",
-                userId.Value,
-                requestedToMonth,
-                cappedToMonth);
+            return;
         }
 
-        foreach (var month in YearMonth.EnumerateRange(YearMonth.FromDate(from), cappedToMonth))
+        var dueRecurringTransactionIds = dueOccurrences.Select(dueOccurrence => dueOccurrence.RecurringTransaction.Id).Distinct().ToList();
+        var materializedOccurrences = await _transactionRepository.ListMaterializedOccurrencesAsync(
+            userId,
+            dueRecurringTransactionIds,
+            fromMonth,
+            toMonth,
+            cancellationToken);
+
+        var missingTransactions = dueOccurrences
+            .Where(dueOccurrence => !materializedOccurrences.Contains(new RecurringOccurrence(dueOccurrence.RecurringTransaction.Id, dueOccurrence.Month)))
+            .Select(dueOccurrence => BuildTransaction(userId, dueOccurrence))
+            .ToList();
+        if (missingTransactions.Count == 0)
         {
-            foreach (var recurringTransaction in recurringTransactions)
-            {
-                if (!recurringTransaction.AppliesToMonth(month))
-                {
-                    continue;
-                }
-
-                var alreadyExists = await _transactionRepository.ExistsForRecurringTransactionAsync(
-                    userId,
-                    recurringTransaction.Id,
-                    month,
-                    cancellationToken);
-                if (alreadyExists)
-                {
-                    continue;
-                }
-
-                var transaction = Transaction.Create(
-                    TransactionId.ForRecurring(recurringTransaction.Id, month),
-                    userId,
-                    recurringTransaction.Type,
-                    recurringTransaction.Amount,
-                    recurringTransaction.GetDateForMonth(month),
-                    recurringTransaction.Description,
-                    recurringTransaction.TagId,
-                    recurringTransaction.PaymentMethod,
-                    DateTimeOffset.UtcNow,
-                    recurringTransaction.Id);
-
-                await _transactionRepository.SaveAsync(transaction, cancellationToken);
-            }
+            return;
         }
+
+        await _transactionRepository.SaveManyAsync(missingTransactions, cancellationToken);
     }
+
+    private YearMonth CapToLatestMaterializableMonth(UserId userId, YearMonth requestedToMonth)
+    {
+        var latestMaterializableMonth = YearMonth.FromDate(DateOnly.FromDateTime(DateTime.UtcNow)).AddMonths(MaxMonthsAheadToMaterialize);
+        if (requestedToMonth <= latestMaterializableMonth)
+        {
+            return requestedToMonth;
+        }
+
+        _logger.LogWarning(
+            "Materialization for user {UserId} requested through {RequestedToMonth} but was capped at {CappedToMonth} -- " +
+            "a caller is asking for recurring transactions too far into the future.",
+            userId.Value,
+            requestedToMonth,
+            latestMaterializableMonth);
+
+        return latestMaterializableMonth;
+    }
+
+    private static IReadOnlyList<DueOccurrence> ListDueOccurrences(
+        IReadOnlyList<RecurringTransaction> recurringTransactions,
+        YearMonth fromMonth,
+        YearMonth toMonth) =>
+        recurringTransactions
+            .SelectMany(recurringTransaction => recurringTransaction
+                .MonthsDueBetween(fromMonth, toMonth)
+                .Select(month => new DueOccurrence(recurringTransaction, month)))
+            .ToList();
+
+    private static Transaction BuildTransaction(UserId userId, DueOccurrence dueOccurrence)
+    {
+        var recurringTransaction = dueOccurrence.RecurringTransaction;
+
+        return Transaction.Create(
+            TransactionId.ForRecurring(recurringTransaction.Id, dueOccurrence.Month),
+            userId,
+            recurringTransaction.Type,
+            recurringTransaction.Amount,
+            recurringTransaction.GetDateForMonth(dueOccurrence.Month),
+            recurringTransaction.Description,
+            recurringTransaction.TagId,
+            recurringTransaction.PaymentMethod,
+            DateTimeOffset.UtcNow,
+            recurringTransaction.Id);
+    }
+
+    private sealed record DueOccurrence(RecurringTransaction RecurringTransaction, YearMonth Month);
 }

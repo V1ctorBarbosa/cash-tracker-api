@@ -218,6 +218,46 @@ public sealed class RecurringTransactionTest
         date.Should().Be(new DateOnly(2026, 2, 28));
     }
 
+    [Fact]
+    public void MonthsDueBetween_ReturnsEveryMonthInRange_WhenTheRecurrenceAppliesToAll()
+    {
+        // Arrange
+        var recurringTransaction = CreateValidRecurringTransaction(startDate: new DateOnly(2026, 1, 1));
+
+        // Act
+        var months = recurringTransaction.MonthsDueBetween(new YearMonth(2026, 7), new YearMonth(2026, 9)).ToList();
+
+        // Assert
+        months.Should().Equal(new YearMonth(2026, 7), new YearMonth(2026, 8), new YearMonth(2026, 9));
+    }
+
+    [Fact]
+    public void MonthsDueBetween_LeavesOutMonthsOutsideTheRecurrencePeriod_AndSkippedMonths()
+    {
+        // Arrange
+        var recurringTransaction = CreateValidRecurringTransaction(startDate: new DateOnly(2026, 6, 10), endDate: new DateOnly(2026, 10, 1))
+            .SkipMonth(new YearMonth(2026, 8));
+
+        // Act
+        var months = recurringTransaction.MonthsDueBetween(new YearMonth(2026, 4), new YearMonth(2026, 12)).ToList();
+
+        // Assert
+        months.Should().Equal(new YearMonth(2026, 6), new YearMonth(2026, 7), new YearMonth(2026, 9), new YearMonth(2026, 10));
+    }
+
+    [Fact]
+    public void MonthsDueBetween_ReturnsNothing_WhenNotActive()
+    {
+        // Arrange
+        var recurringTransaction = CreateValidRecurringTransaction(active: false);
+
+        // Act
+        var months = recurringTransaction.MonthsDueBetween(new YearMonth(2026, 1), new YearMonth(2026, 12));
+
+        // Assert
+        months.Should().BeEmpty();
+    }
+
     private static RecurringTransaction CreateValidRecurringTransaction(
         string? description = "Aluguel",
         int dayOfMonth = 5,

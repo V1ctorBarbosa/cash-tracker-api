@@ -134,4 +134,28 @@ public sealed class YearMonthTest
         // Assert
         months.Should().Equal(new YearMonth(2026, 9));
     }
+
+    [Fact]
+    public void FirstDay_ReturnsTheFirstDayOfTheMonth()
+    {
+        // Act
+        var firstDay = new YearMonth(2026, 9).FirstDay();
+
+        // Assert
+        firstDay.Should().Be(new DateOnly(2026, 9, 1));
+    }
+
+    [Theory]
+    [InlineData(2026, 9, 30)]
+    [InlineData(2026, 12, 31)]
+    [InlineData(2026, 2, 28)]
+    [InlineData(2028, 2, 29)]
+    public void LastDay_ReturnsTheLastDayOfTheMonth(int year, int month, int expectedDay)
+    {
+        // Act
+        var lastDay = new YearMonth(year, month).LastDay();
+
+        // Assert
+        lastDay.Should().Be(new DateOnly(year, month, expectedDay));
+    }
 }
