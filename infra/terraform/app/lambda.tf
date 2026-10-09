@@ -7,8 +7,11 @@ resource "aws_lambda_function" "api" {
   handler = "CashTrack.Api"
   runtime = "dotnet10"
 
-  timeout     = 30
-  memory_size = 512
+  timeout = 30
+  # Lambda allocates CPU in proportion to memory: at 512 MB the function gets a fraction of a
+  # vCPU, which makes .NET's startup (loading assemblies, building the DI container, opening the
+  # Firestore gRPC channel) the dominant part of every cold start.
+  memory_size = 1024
 
   filename         = var.lambda_zip_path
   source_code_hash = filebase64sha256(var.lambda_zip_path)
