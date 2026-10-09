@@ -119,15 +119,54 @@ public sealed class TransactionService
         }
 
         await _transactionRepository.DeleteAsync(userId, transactionId, cancellationToken);
-
-        // Without this, the next bounded-range query (history, dashboard) would see no transaction
-        // for this recurrence/month and lazily re-materialize the exact one just deleted.
-        if (existingTransaction.RecurringTransactionId is { } recurringTransactionId)
-        {
-            await _recurringTransactionService.SkipMonthAsync(userId, recurringTransactionId, YearMonth.FromDate(existingTransaction.Date), cancellationToken);
-        }
+        await SkipRecurringMonthAsync(userId, existingTransaction, cancellationToken);
 
         return true;
+    }
+
+    public async Task<DeletedTransactionsDto> DeleteInRangeAsync(
+        UserId userId,
+        DateOnly from,
+        DateOnly to,
+        CancellationToken cancellationToken = default)
+    {
+        if (from > to)
+        {
+            throw new ArgumentException("The start date must not be after the end date.", nameof(from));
+        }
+
+        var transactionsInRange = await _transactionRepository.ListByUserAsync(
+            userId,
+            new TransactionQuery(from, to, TagId: null, Type: null, PaymentMethod: null),
+            cancellationToken);
+        if (transactionsInRange.Count == 0)
+        {
+            return new DeletedTransactionsDto(0);
+        }
+
+        var transactionIds = transactionsInRange.Select(transaction => transaction.Id).ToList();
+        await _transactionRepository.DeleteManyAsync(userId, transactionIds, cancellationToken);
+
+        foreach (var deletedTransaction in transactionsInRange)
+        {
+            await SkipRecurringMonthAsync(userId, deletedTransaction, cancellationToken);
+        }
+
+        return new DeletedTransactionsDto(transactionsInRange.Count);
+    }
+
+    /// <summary>
+    /// Without this, the next bounded-range query (history, dashboard) would see no transaction
+    /// for this recurrence/month and lazily re-materialize the exact one just deleted.
+    /// </summary>
+    private async Task SkipRecurringMonthAsync(UserId userId, Transaction deletedTransaction, CancellationToken cancellationToken)
+    {
+        if (deletedTransaction.RecurringTransactionId is not { } recurringTransactionId)
+        {
+            return;
+        }
+
+        await _recurringTransactionService.SkipMonthAsync(userId, recurringTransactionId, YearMonth.FromDate(deletedTransaction.Date), cancellationToken);
     }
 
     /// <summary>
