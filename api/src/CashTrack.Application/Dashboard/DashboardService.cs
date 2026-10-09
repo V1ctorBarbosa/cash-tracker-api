@@ -37,15 +37,21 @@ public sealed class DashboardService
         _recurringTransactionMaterializationService = recurringTransactionMaterializationService;
     }
 
+    /// <summary>
+    /// Tags and budgets don't depend on materialization, so they're fetched while it runs; only the
+    /// transaction read has to wait for it, since it must see the occurrences materialization writes.
+    /// </summary>
     public async Task<DashboardDto> GetAsync(UserId userId, DateOnly from, DateOnly to, CancellationToken cancellationToken = default)
     {
-        await _recurringTransactionMaterializationService.MaterializeAsync(userId, from, to, cancellationToken);
+        var tagsTask = _tagRepository.ListByUserAsync(userId, cancellationToken);
+        var budgetsTask = _budgetRepository.ListByUserBetweenMonthsAsync(userId, YearMonth.FromDate(from), YearMonth.FromDate(to), cancellationToken);
+        var transactionsTask = MaterializeThenListTransactionsAsync(userId, from, to, cancellationToken);
 
-        var transactions = await _transactionRepository.ListByUserAsync(
-            userId,
-            new TransactionQuery(from, to, TagId: null, Type: null, PaymentMethod: null),
-            cancellationToken);
-        var tagsById = (await _tagRepository.ListByUserAsync(userId, cancellationToken)).ToDictionary(tag => tag.Id);
+        await Task.WhenAll(tagsTask, budgetsTask, transactionsTask);
+
+        var transactions = await transactionsTask;
+        var tagsById = (await tagsTask).ToDictionary(tag => tag.Id);
+        var budgets = await budgetsTask;
 
         var totalIncome = SumByType(transactions, TransactionType.Income);
         var totalExpense = SumByType(transactions, TransactionType.Expense);
@@ -57,7 +63,21 @@ public sealed class DashboardService
             BuildMonthlySummary(transactions, from, to),
             BuildSpendByTag(transactions, tagsById),
             BuildSpendByPaymentMethod(transactions),
-            await BuildBudgetsAsync(userId, from, to, transactions, tagsById, cancellationToken));
+            BuildBudgets(budgets, transactions, tagsById));
+    }
+
+    private async Task<IReadOnlyList<Transaction>> MaterializeThenListTransactionsAsync(
+        UserId userId,
+        DateOnly from,
+        DateOnly to,
+        CancellationToken cancellationToken)
+    {
+        await _recurringTransactionMaterializationService.MaterializeAsync(userId, from, to, cancellationToken);
+
+        return await _transactionRepository.ListByUserAsync(
+            userId,
+            new TransactionQuery(from, to, TagId: null, Type: null, PaymentMethod: null),
+            cancellationToken);
     }
 
     private static decimal SumByType(IReadOnlyList<Transaction> transactions, TransactionType type) =>
@@ -94,22 +114,12 @@ public sealed class DashboardService
             .Select(group => new PaymentMethodAmountDto(group.Key.ToString(), group.Sum(transaction => transaction.Amount.Amount)))
             .ToList();
 
-    /// <summary>Every Budget whose month falls in [from, to], each carrying the actual expense total spent on its tag that month.</summary>
-    private async Task<IReadOnlyList<BudgetProgressDto>> BuildBudgetsAsync(
-        UserId userId,
-        DateOnly from,
-        DateOnly to,
+    /// <summary>Each budget in the queried range, carrying the actual expense total spent on its tag that month.</summary>
+    private static IReadOnlyList<BudgetProgressDto> BuildBudgets(
+        IReadOnlyList<Budget> budgets,
         IReadOnlyList<Transaction> transactions,
-        IReadOnlyDictionary<TagId, Tag> tagsById,
-        CancellationToken cancellationToken)
-    {
-        var fromMonth = YearMonth.FromDate(from);
-        var toMonth = YearMonth.FromDate(to);
-
-        var budgetsInRange = (await _budgetRepository.ListByUserAsync(userId, month: null, cancellationToken))
-            .Where(budget => budget.Month >= fromMonth && budget.Month <= toMonth);
-
-        return budgetsInRange
+        IReadOnlyDictionary<TagId, Tag> tagsById) =>
+        budgets
             .Select(budget => new BudgetProgressDto(
                 budget.TagId.Value,
                 ResolveTagName(budget.TagId, tagsById),
@@ -118,7 +128,6 @@ public sealed class DashboardService
                 budget.LimitAmount.Amount,
                 ActualExpenseForTagAndMonth(transactions, budget.TagId, budget.Month)))
             .ToList();
-    }
 
     private static decimal ActualExpenseForTagAndMonth(IReadOnlyList<Transaction> transactions, TagId tagId, YearMonth month) => transactions
         .Where(transaction =>

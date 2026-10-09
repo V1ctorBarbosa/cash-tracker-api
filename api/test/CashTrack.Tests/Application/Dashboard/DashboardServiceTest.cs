@@ -5,6 +5,7 @@ using CashTrack.Application.Tags;
 using CashTrack.Application.Transactions;
 using CashTrack.Domain.Budgets;
 using CashTrack.Domain.Common;
+using CashTrack.Domain.RecurringTransactions;
 using CashTrack.Domain.Tags;
 using CashTrack.Domain.Transactions;
 using CashTrack.Domain.Users;
@@ -42,7 +43,7 @@ public sealed class DashboardServiceTest
             Tag.Create(_mercadoTagId, _userId, "Mercado", new TagColor("#000000"), TransactionType.Expense),
             Tag.Create(_lazerTagId, _userId, "Lazer", new TagColor("#000000"), TransactionType.Expense),
         ]);
-        _budgetRepository.ListByUserAsync(_userId, null, Arg.Any<CancellationToken>()).Returns([]);
+        SetBudgets();
         _transactionRepository
             .ListByUserAsync(_userId, Arg.Any<TransactionQuery>(), Arg.Any<CancellationToken>())
             .Returns([]);
@@ -163,7 +164,7 @@ public sealed class DashboardServiceTest
     {
         // Arrange
         var budget = Budget.Create(_userId, _lazerTagId, new YearMonth(2026, 9), new Money(500.00m));
-        _budgetRepository.ListByUserAsync(_userId, null, Arg.Any<CancellationToken>()).Returns([budget]);
+        SetBudgets(budget);
         SetTransactions(
             CreateTransaction(TransactionType.Expense, 45.00m, new DateOnly(2026, 9, 10), _lazerTagId, PaymentMethod.Pix),
             // Different tag -- must not count towards the Lazer budget's actual amount.
@@ -178,17 +179,18 @@ public sealed class DashboardServiceTest
     }
 
     [Fact]
-    public async Task GetAsync_ExcludesBudgets_OutsideTheQueriedRange()
+    public async Task GetAsync_ListsBudgets_OnlyForTheMonthsInTheQueriedRange()
     {
-        // Arrange
-        var budgetOutsideRange = Budget.Create(_userId, _lazerTagId, new YearMonth(2026, 6), new Money(500.00m));
-        _budgetRepository.ListByUserAsync(_userId, null, Arg.Any<CancellationToken>()).Returns([budgetOutsideRange]);
-
         // Act
-        var dashboard = await _sut.GetAsync(_userId, new DateOnly(2026, 9, 1), new DateOnly(2026, 9, 30));
+        await _sut.GetAsync(_userId, new DateOnly(2026, 4, 1), new DateOnly(2026, 9, 30));
 
         // Assert
-        dashboard.Budgets.Should().BeEmpty();
+        await _budgetRepository.Received(1).ListByUserBetweenMonthsAsync(
+            _userId,
+            new YearMonth(2026, 4),
+            new YearMonth(2026, 9),
+            Arg.Any<CancellationToken>());
+        await _budgetRepository.DidNotReceive().ListByUserAsync(Arg.Any<UserId>(), Arg.Any<YearMonth?>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -200,6 +202,40 @@ public sealed class DashboardServiceTest
         // Assert
         await _recurringTransactionRepository.Received(1).ListByUserAsync(_userId, Arg.Any<CancellationToken>());
     }
+
+    [Fact]
+    public async Task GetAsync_MaterializesRecurringTransactions_BeforeListingTransactions()
+    {
+        // Arrange -- otherwise the dashboard would miss the occurrences materialization just wrote.
+        var recurringTransaction = RecurringTransaction.Create(
+            new RecurringTransactionId("recurring-1"),
+            _userId,
+            TransactionType.Expense,
+            new Money(1800.00m),
+            "Aluguel",
+            _moradiaTagId,
+            PaymentMethod.TransferenciaBancaria,
+            5,
+            new DateOnly(2026, 1, 1),
+            null,
+            true);
+        _recurringTransactionRepository.ListByUserAsync(_userId, Arg.Any<CancellationToken>()).Returns([recurringTransaction]);
+
+        // Act
+        await _sut.GetAsync(_userId, new DateOnly(2026, 9, 1), new DateOnly(2026, 9, 30));
+
+        // Assert
+        Received.InOrder(() =>
+        {
+            _transactionRepository.SaveManyAsync(Arg.Any<IReadOnlyCollection<Transaction>>(), Arg.Any<CancellationToken>());
+            _transactionRepository.ListByUserAsync(_userId, Arg.Any<TransactionQuery>(), Arg.Any<CancellationToken>());
+        });
+    }
+
+    private void SetBudgets(params Budget[] budgets) =>
+        _budgetRepository
+            .ListByUserBetweenMonthsAsync(_userId, Arg.Any<YearMonth>(), Arg.Any<YearMonth>(), Arg.Any<CancellationToken>())
+            .Returns(budgets);
 
     private void SetTransactions(params Transaction[] transactions) =>
         _transactionRepository.ListByUserAsync(_userId, Arg.Any<TransactionQuery>(), Arg.Any<CancellationToken>()).Returns(transactions);

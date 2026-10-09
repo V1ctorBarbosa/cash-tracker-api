@@ -12,6 +12,9 @@ public sealed class FirestoreBudgetRepository : IBudgetRepository
     private const string UserIdFieldName = "UserId";
     private const string MonthFieldName = "Month";
 
+    // Firestore rejects a WhereIn filter with more than 30 values.
+    private const int MaxWhereInValues = 30;
+
     private readonly FirestoreDb _firestoreDb;
 
     public FirestoreBudgetRepository(FirestoreDb firestoreDb)
@@ -31,6 +34,31 @@ public sealed class FirestoreBudgetRepository : IBudgetRepository
         var querySnapshot = await query.GetSnapshotAsync(cancellationToken);
 
         return querySnapshot.Documents
+            .Select(document => BudgetDocumentMapper.ToDomain(document.ConvertTo<BudgetDocument>()))
+            .ToList();
+    }
+
+    /// <summary>
+    /// Filters with WhereIn over the range's months rather than a range filter on Month: equality
+    /// plus WhereIn is served by Firestore's automatic single-field indexes, whereas equality plus
+    /// a range filter would need a manually created composite index.
+    /// </summary>
+    public async Task<IReadOnlyList<Budget>> ListByUserBetweenMonthsAsync(
+        UserId userId,
+        YearMonth fromMonth,
+        YearMonth toMonth,
+        CancellationToken cancellationToken = default)
+    {
+        var chunkSnapshots = await Task.WhenAll(YearMonth.EnumerateRange(fromMonth, toMonth)
+            .Select(month => month.ToString())
+            .Chunk(MaxWhereInValues)
+            .Select(monthsChunk => _firestoreDb.Collection(CollectionName)
+                .WhereEqualTo(UserIdFieldName, userId.Value)
+                .WhereIn(MonthFieldName, monthsChunk)
+                .GetSnapshotAsync(cancellationToken)));
+
+        return chunkSnapshots
+            .SelectMany(querySnapshot => querySnapshot.Documents)
             .Select(document => BudgetDocumentMapper.ToDomain(document.ConvertTo<BudgetDocument>()))
             .ToList();
     }
