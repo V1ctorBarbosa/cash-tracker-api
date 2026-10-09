@@ -23,10 +23,11 @@ public static class DashboardEndpoints
         DateOnly from,
         DateOnly to,
         DashboardService dashboardService,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        DateOnly? trendFrom = null)
     {
         var userId = user.GetAuthenticatedUserId();
-        var dashboard = await dashboardService.GetAsync(userId, from, to, cancellationToken);
+        var dashboard = await dashboardService.GetAsync(userId, from, to, trendFrom, cancellationToken);
 
         return Results.Ok(dashboard);
     }
