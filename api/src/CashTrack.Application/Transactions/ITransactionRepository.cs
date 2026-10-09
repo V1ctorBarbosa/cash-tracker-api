@@ -21,4 +21,6 @@ public interface ITransactionRepository
     Task SaveAsync(Transaction transaction, CancellationToken cancellationToken = default);
 
     Task DeleteAsync(UserId userId, TransactionId transactionId, CancellationToken cancellationToken = default);
+
+    Task DeleteManyAsync(UserId userId, IReadOnlyCollection<TransactionId> transactionIds, CancellationToken cancellationToken = default);
 }

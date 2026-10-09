@@ -18,6 +18,7 @@ public static class TransactionEndpoints
         group.MapPost("/", CreateTransactionAsync).WithName(RouteNames.CreateTransaction);
         group.MapPut("/{id}", UpdateTransactionAsync).WithName(RouteNames.UpdateTransaction);
         group.MapDelete("/{id}", DeleteTransactionAsync).WithName(RouteNames.DeleteTransaction);
+        group.MapDelete("/", DeleteTransactionsInRangeAsync).WithName(RouteNames.DeleteTransactionsInRange);
 
         return app;
     }
@@ -102,6 +103,23 @@ public static class TransactionEndpoints
         return Results.NoContent();
     }
 
+    /// <summary>
+    /// Both bounds are required (non-nullable parameters bind to a 400 when missing), so a bare
+    /// DELETE /transactions can never wipe a user's whole history.
+    /// </summary>
+    private static async Task<IResult> DeleteTransactionsInRangeAsync(
+        ClaimsPrincipal user,
+        DateOnly from,
+        DateOnly to,
+        TransactionService transactionService,
+        CancellationToken cancellationToken)
+    {
+        var userId = user.GetAuthenticatedUserId();
+        var deletedTransactions = await transactionService.DeleteInRangeAsync(userId, from, to, cancellationToken);
+
+        return Results.Ok(deletedTransactions);
+    }
+
     private static class RouteNames
     {
         public const string ListTransactions = "ListTransactions";
@@ -109,5 +127,6 @@ public static class TransactionEndpoints
         public const string CreateTransaction = "CreateTransaction";
         public const string UpdateTransaction = "UpdateTransaction";
         public const string DeleteTransaction = "DeleteTransaction";
+        public const string DeleteTransactionsInRange = "DeleteTransactionsInRange";
     }
 }

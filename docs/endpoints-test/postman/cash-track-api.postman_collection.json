@@ -161,6 +161,21 @@
             "url": "{{baseUrl}}/transactions/:id",
             "variable": [{ "key": "id", "value": "" }]
           }
+        },
+        {
+          "name": "Delete transactions in range",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/transactions?from=2026-09-01&to=2026-09-30",
+              "host": ["{{baseUrl}}"],
+              "path": ["transactions"],
+              "query": [
+                { "key": "from", "value": "2026-09-01" },
+                { "key": "to", "value": "2026-09-30" }
+              ]
+            }
+          }
         }
       ]
     },

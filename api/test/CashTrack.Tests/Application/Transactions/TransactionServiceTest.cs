@@ -293,6 +293,138 @@ public sealed class TransactionServiceTest
             Arg.Any<CancellationToken>());
     }
 
+    [Fact]
+    public async Task DeleteInRangeAsync_DeletesEveryTransactionInTheRange_AndReturnsTheCount()
+    {
+        // Arrange
+        var from = new DateOnly(2026, 9, 1);
+        var to = new DateOnly(2026, 9, 30);
+        var firstTransaction = CreateTransactionWithId("transaction-1");
+        var secondTransaction = CreateTransactionWithId("transaction-2");
+        _transactionRepository
+            .ListByUserAsync(_userId, Arg.Any<TransactionQuery>(), Arg.Any<CancellationToken>())
+            .Returns([firstTransaction, secondTransaction]);
+
+        // Act
+        var result = await _sut.DeleteInRangeAsync(_userId, from, to);
+
+        // Assert
+        result.DeletedCount.Should().Be(2);
+        await _transactionRepository.Received(1).ListByUserAsync(
+            _userId,
+            Arg.Is<TransactionQuery>(query =>
+                query.From == from && query.To == to && query.TagId == null && query.Type == null && query.PaymentMethod == null),
+            Arg.Any<CancellationToken>());
+        await _transactionRepository.Received(1).DeleteManyAsync(
+            _userId,
+            Arg.Is<IReadOnlyCollection<TransactionId>>(ids => ids.SequenceEqual(new[] { firstTransaction.Id, secondTransaction.Id })),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task DeleteInRangeAsync_ReturnsZero_AndDeletesNothing_WhenTheRangeHasNoTransactions()
+    {
+        // Arrange
+        _transactionRepository
+            .ListByUserAsync(_userId, Arg.Any<TransactionQuery>(), Arg.Any<CancellationToken>())
+            .Returns([]);
+
+        // Act
+        var result = await _sut.DeleteInRangeAsync(_userId, new DateOnly(2026, 9, 1), new DateOnly(2026, 9, 30));
+
+        // Assert
+        result.DeletedCount.Should().Be(0);
+        await _transactionRepository.DidNotReceive().DeleteManyAsync(
+            Arg.Any<UserId>(),
+            Arg.Any<IReadOnlyCollection<TransactionId>>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task DeleteInRangeAsync_Throws_WhenTheStartDateIsAfterTheEndDate()
+    {
+        // Act
+        var act = () => _sut.DeleteInRangeAsync(_userId, new DateOnly(2026, 9, 30), new DateOnly(2026, 9, 1));
+
+        // Assert
+        await act.Should().ThrowAsync<ArgumentException>();
+        await _transactionRepository.DidNotReceive().DeleteManyAsync(
+            Arg.Any<UserId>(),
+            Arg.Any<IReadOnlyCollection<TransactionId>>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task DeleteInRangeAsync_SkipsTheMonthOnEveryRecurringDefinitionThatWasMaterializedIntoTheRange()
+    {
+        // Arrange
+        var recurringTransactionId = new RecurringTransactionId("recurring-1");
+        var materializedTransaction = Transaction.Create(
+            new TransactionId("transaction-1"),
+            _userId,
+            TransactionType.Income,
+            new Money(5200.00m),
+            new DateOnly(2026, 9, 10),
+            "Salário",
+            new TagId("tag-salario"),
+            PaymentMethod.Pix,
+            DateTimeOffset.UtcNow,
+            recurringTransactionId);
+        _transactionRepository
+            .ListByUserAsync(_userId, Arg.Any<TransactionQuery>(), Arg.Any<CancellationToken>())
+            .Returns([materializedTransaction, CreateTransactionWithId("transaction-2")]);
+
+        var existingRecurringTransaction = RecurringTransaction.Create(
+            recurringTransactionId,
+            _userId,
+            TransactionType.Income,
+            new Money(5200.00m),
+            "Salário",
+            new TagId("tag-salario"),
+            PaymentMethod.Pix,
+            10,
+            new DateOnly(2026, 1, 1),
+            null,
+            active: true);
+        _recurringTransactionRepository
+            .GetByIdAsync(_userId, recurringTransactionId, Arg.Any<CancellationToken>())
+            .Returns(existingRecurringTransaction);
+
+        // Act
+        await _sut.DeleteInRangeAsync(_userId, new DateOnly(2026, 9, 1), new DateOnly(2026, 9, 30));
+
+        // Assert
+        await _recurringTransactionRepository.Received(1).SaveAsync(
+            Arg.Is<RecurringTransaction>(recurringTransaction => recurringTransaction.SkippedMonths.Contains(new YearMonth(2026, 9))),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task DeleteInRangeAsync_DoesNotTouchAnyRecurringDefinition_WhenNoneOfTheDeletedTransactionsIsRecurring()
+    {
+        // Arrange
+        _transactionRepository
+            .ListByUserAsync(_userId, Arg.Any<TransactionQuery>(), Arg.Any<CancellationToken>())
+            .Returns([CreateTransactionWithId("transaction-1")]);
+
+        // Act
+        await _sut.DeleteInRangeAsync(_userId, new DateOnly(2026, 9, 1), new DateOnly(2026, 9, 30));
+
+        // Assert
+        await _recurringTransactionRepository.DidNotReceive().SaveAsync(Arg.Any<RecurringTransaction>(), Arg.Any<CancellationToken>());
+    }
+
+    private Transaction CreateTransactionWithId(string id) => Transaction.Create(
+        new TransactionId(id),
+        _userId,
+        TransactionType.Expense,
+        new Money(89.90m),
+        new DateOnly(2026, 9, 10),
+        "Supermercado",
+        new TagId("tag-mercado"),
+        PaymentMethod.CartaoDebito,
+        DateTimeOffset.UtcNow);
+
     private Transaction CreateValidTransaction() => Transaction.Create(
         new TransactionId("transaction-1"),
         _userId,

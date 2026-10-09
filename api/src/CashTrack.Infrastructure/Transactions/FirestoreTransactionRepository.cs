@@ -23,6 +23,9 @@ public sealed class FirestoreTransactionRepository : ITransactionRepository
     private const string RecurringTransactionIdFieldName = "RecurringTransactionId";
     private const string DateFormat = "yyyy-MM-dd";
 
+    // Firestore rejects a single batched write with more than 500 operations.
+    private const int MaxWritesPerBatch = 500;
+
     private readonly FirestoreDb _firestoreDb;
 
     public FirestoreTransactionRepository(FirestoreDb firestoreDb)
@@ -123,5 +126,19 @@ public sealed class FirestoreTransactionRepository : ITransactionRepository
         await _firestoreDb.Collection(CollectionName)
             .Document(transactionId.Value)
             .DeleteAsync(cancellationToken: cancellationToken);
+    }
+
+    public async Task DeleteManyAsync(UserId userId, IReadOnlyCollection<TransactionId> transactionIds, CancellationToken cancellationToken = default)
+    {
+        foreach (var transactionIdsChunk in transactionIds.Chunk(MaxWritesPerBatch))
+        {
+            var batch = _firestoreDb.StartBatch();
+            foreach (var transactionId in transactionIdsChunk)
+            {
+                batch.Delete(_firestoreDb.Collection(CollectionName).Document(transactionId.Value));
+            }
+
+            await batch.CommitAsync(cancellationToken);
+        }
     }
 }
