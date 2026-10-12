@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using CashTrack.Api.Authentication;
 using CashTrack.Application.Transactions;
+using CashTrack.Application.TransactionStatistics;
 using CashTrack.Domain.Transactions;
 
 namespace CashTrack.Api.Endpoints;
@@ -14,6 +15,7 @@ public static class TransactionEndpoints
         var group = app.MapGroup(RoutePrefix).RequireAuthorization();
 
         group.MapGet("/", ListTransactionsAsync).WithName(RouteNames.ListTransactions);
+        group.MapGet("/statistics", GetTransactionStatisticsAsync).WithName(RouteNames.GetTransactionStatistics);
         group.MapGet("/{id}", GetTransactionAsync).WithName(RouteNames.GetTransaction);
         group.MapPost("/", CreateTransactionAsync).WithName(RouteNames.CreateTransaction);
         group.MapPut("/{id}", UpdateTransactionAsync).WithName(RouteNames.UpdateTransaction);
@@ -37,6 +39,17 @@ public static class TransactionEndpoints
         var transactions = await transactionService.ListAsync(userId, from, to, tagId, type, paymentMethod, cancellationToken);
 
         return Results.Ok(transactions);
+    }
+
+    private static async Task<IResult> GetTransactionStatisticsAsync(
+        ClaimsPrincipal user,
+        TransactionStatisticsService transactionStatisticsService,
+        CancellationToken cancellationToken)
+    {
+        var userId = user.GetAuthenticatedUserId();
+        var statistics = await transactionStatisticsService.GetAsync(userId, cancellationToken);
+
+        return Results.Ok(statistics);
     }
 
     private static async Task<IResult> GetTransactionAsync(
@@ -123,6 +136,7 @@ public static class TransactionEndpoints
     private static class RouteNames
     {
         public const string ListTransactions = "ListTransactions";
+        public const string GetTransactionStatistics = "GetTransactionStatistics";
         public const string GetTransaction = "GetTransaction";
         public const string CreateTransaction = "CreateTransaction";
         public const string UpdateTransaction = "UpdateTransaction";

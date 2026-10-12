@@ -1,5 +1,6 @@
 using CashTrack.Domain.Common;
 using CashTrack.Domain.RecurringTransactions;
+using CashTrack.Domain.Tags;
 using CashTrack.Domain.Transactions;
 using CashTrack.Domain.Users;
 
@@ -8,6 +9,12 @@ namespace CashTrack.Application.Transactions;
 public interface ITransactionRepository
 {
     Task<IReadOnlyList<Transaction>> ListByUserAsync(UserId userId, TransactionQuery query, CancellationToken cancellationToken = default);
+
+    /// <summary>How many transactions the user has in total, or only with the given tag when <paramref name="tagId"/> is set.</summary>
+    Task<int> CountByUserAsync(UserId userId, TagId? tagId, CancellationToken cancellationToken = default);
+
+    /// <summary>The date of the user's oldest transaction, or null when they have none.</summary>
+    Task<DateOnly?> FindEarliestDateAsync(UserId userId, CancellationToken cancellationToken = default);
 
     Task<Transaction?> GetByIdAsync(UserId userId, TransactionId transactionId, CancellationToken cancellationToken = default);
 

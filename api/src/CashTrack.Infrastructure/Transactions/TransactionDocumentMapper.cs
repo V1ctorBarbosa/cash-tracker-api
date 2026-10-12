@@ -26,7 +26,7 @@ internal static class TransactionDocumentMapper
         new UserId(document.UserId),
         Enum.Parse<TransactionType>(document.Type),
         new Money(document.Amount),
-        DateOnly.ParseExact(document.Date, DateFormat, CultureInfo.InvariantCulture),
+        ParseDate(document.Date),
         document.Description,
         new TagId(document.TagId),
         Enum.Parse<PaymentMethod>(document.PaymentMethod),
@@ -45,9 +45,10 @@ internal static class TransactionDocumentMapper
             return null;
         }
 
-        var date = DateOnly.ParseExact(document.Date, DateFormat, CultureInfo.InvariantCulture);
-        return new RecurringOccurrence(new RecurringTransactionId(document.RecurringTransactionId), YearMonth.FromDate(date));
+        return new RecurringOccurrence(new RecurringTransactionId(document.RecurringTransactionId), YearMonth.FromDate(ParseDate(document.Date)));
     }
+
+    public static DateOnly ParseDate(string storedDate) => DateOnly.ParseExact(storedDate, DateFormat, CultureInfo.InvariantCulture);
 
     public static TransactionDocument ToDocument(Transaction transaction) => new()
     {
