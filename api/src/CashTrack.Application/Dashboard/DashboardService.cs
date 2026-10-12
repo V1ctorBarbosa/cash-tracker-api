@@ -38,18 +38,29 @@ public sealed class DashboardService
     }
 
     /// <summary>
-    /// Tags and budgets don't depend on materialization, so they're fetched while it runs; only the
-    /// transaction read has to wait for it, since it must see the occurrences materialization writes.
+    /// Every figure covers [<paramref name="from"/>, <paramref name="to"/>] except the monthly
+    /// summary, which starts at <paramref name="trendFrom"/> when given -- so one request can serve
+    /// a single month's breakdown alongside a longer trend. Tags and budgets don't depend on
+    /// materialization, so they're fetched while it runs; only the transaction read has to wait for
+    /// it, since it must see the occurrences materialization writes.
     /// </summary>
-    public async Task<DashboardDto> GetAsync(UserId userId, DateOnly from, DateOnly to, CancellationToken cancellationToken = default)
+    public async Task<DashboardDto> GetAsync(
+        UserId userId,
+        DateOnly from,
+        DateOnly to,
+        DateOnly? trendFrom = null,
+        CancellationToken cancellationToken = default)
     {
+        var trendStart = ResolveTrendStart(from, trendFrom);
+
         var tagsTask = _tagRepository.ListByUserAsync(userId, cancellationToken);
         var budgetsTask = _budgetRepository.ListByUserBetweenMonthsAsync(userId, YearMonth.FromDate(from), YearMonth.FromDate(to), cancellationToken);
-        var transactionsTask = MaterializeThenListTransactionsAsync(userId, from, to, cancellationToken);
+        var trendTransactionsTask = MaterializeThenListTransactionsAsync(userId, trendStart, to, cancellationToken);
 
-        await Task.WhenAll(tagsTask, budgetsTask, transactionsTask);
+        await Task.WhenAll(tagsTask, budgetsTask, trendTransactionsTask);
 
-        var transactions = await transactionsTask;
+        var trendTransactions = await trendTransactionsTask;
+        var transactions = trendTransactions.Where(transaction => transaction.Date >= from).ToList();
         var tagsById = (await tagsTask).ToDictionary(tag => tag.Id);
         var budgets = await budgetsTask;
 
@@ -60,10 +71,25 @@ public sealed class DashboardService
             totalIncome,
             totalExpense,
             totalIncome - totalExpense,
-            BuildMonthlySummary(transactions, from, to),
+            BuildMonthlySummary(trendTransactions, trendStart, to),
             BuildSpendByTag(transactions, tagsById),
             BuildSpendByPaymentMethod(transactions),
             BuildBudgets(budgets, transactions, tagsById));
+    }
+
+    private static DateOnly ResolveTrendStart(DateOnly from, DateOnly? trendFrom)
+    {
+        if (trendFrom is not { } requestedTrendStart)
+        {
+            return from;
+        }
+
+        if (requestedTrendStart > from)
+        {
+            throw new ArgumentException("The trend start date must not be after the start date.", nameof(trendFrom));
+        }
+
+        return requestedTrendStart;
     }
 
     private async Task<IReadOnlyList<Transaction>> MaterializeThenListTransactionsAsync(

@@ -285,6 +285,22 @@
               ]
             }
           }
+        },
+        {
+          "name": "Get dashboard with a longer monthly trend",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/dashboard?from=2026-09-01&to=2026-09-30&trendFrom=2026-04-01",
+              "host": ["{{baseUrl}}"],
+              "path": ["dashboard"],
+              "query": [
+                { "key": "from", "value": "2026-09-01" },
+                { "key": "to", "value": "2026-09-30" },
+                { "key": "trendFrom", "value": "2026-04-01", "description": "Optional. Start of the monthlySummary trend; must not be after from. Every other figure still covers only [from, to]." }
+              ]
+            }
+          }
         }
       ]
     }

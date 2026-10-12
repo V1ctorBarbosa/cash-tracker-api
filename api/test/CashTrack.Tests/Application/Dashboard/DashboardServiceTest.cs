@@ -232,6 +232,68 @@ public sealed class DashboardServiceTest
         });
     }
 
+    [Fact]
+    public async Task GetAsync_SummarizesMonthsFromTrendFrom_WhileEveryOtherFigureCoversOnlyTheQueriedRange()
+    {
+        // Arrange -- the Home screen: September's breakdown plus a trend back to July.
+        SetTransactions(
+            CreateTransaction(TransactionType.Expense, 300.00m, new DateOnly(2026, 7, 10), _lazerTagId, PaymentMethod.Pix),
+            CreateTransaction(TransactionType.Income, 5200.00m, new DateOnly(2026, 8, 1), _moradiaTagId, PaymentMethod.Pix),
+            CreateTransaction(TransactionType.Expense, 89.90m, new DateOnly(2026, 9, 7), _mercadoTagId, PaymentMethod.CartaoDebito));
+
+        // Act
+        var dashboard = await _sut.GetAsync(_userId, new DateOnly(2026, 9, 1), new DateOnly(2026, 9, 30), trendFrom: new DateOnly(2026, 7, 1));
+
+        // Assert
+        dashboard.MonthlySummary.Should().Equal(
+            new MonthlySummaryDto("2026-07", 0m, 300.00m),
+            new MonthlySummaryDto("2026-08", 5200.00m, 0m),
+            new MonthlySummaryDto("2026-09", 0m, 89.90m));
+        dashboard.TotalIncome.Should().Be(0m);
+        dashboard.TotalExpense.Should().Be(89.90m);
+        dashboard.SpendByTag.Should().ContainSingle().Which.TagId.Should().Be("tag-mercado");
+        dashboard.SpendByPaymentMethod.Should().ContainSingle().Which.PaymentMethod.Should().Be("CartaoDebito");
+    }
+
+    [Fact]
+    public async Task GetAsync_CountsOnlyTheQueriedRange_TowardsABudgetsActualAmount_WhenTrendFromIsGiven()
+    {
+        // Arrange -- a Lazer expense in July must not leak into September's Lazer budget.
+        SetBudgets(Budget.Create(_userId, _lazerTagId, new YearMonth(2026, 9), new Money(500.00m)));
+        SetTransactions(
+            CreateTransaction(TransactionType.Expense, 300.00m, new DateOnly(2026, 7, 10), _lazerTagId, PaymentMethod.Pix),
+            CreateTransaction(TransactionType.Expense, 45.00m, new DateOnly(2026, 9, 10), _lazerTagId, PaymentMethod.Pix));
+
+        // Act
+        var dashboard = await _sut.GetAsync(_userId, new DateOnly(2026, 9, 1), new DateOnly(2026, 9, 30), trendFrom: new DateOnly(2026, 7, 1));
+
+        // Assert
+        dashboard.Budgets.Should().ContainSingle().Which.ActualAmount.Should().Be(45.00m);
+    }
+
+    [Fact]
+    public async Task GetAsync_ReadsTransactionsOnceFromTrendFrom_WhenTrendFromIsGiven()
+    {
+        // Act
+        await _sut.GetAsync(_userId, new DateOnly(2026, 9, 1), new DateOnly(2026, 9, 30), trendFrom: new DateOnly(2026, 4, 1));
+
+        // Assert
+        await _transactionRepository.Received(1).ListByUserAsync(
+            _userId,
+            Arg.Is<TransactionQuery>(query => query.From == new DateOnly(2026, 4, 1) && query.To == new DateOnly(2026, 9, 30)),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task GetAsync_Throws_WhenTrendFromIsAfterFrom()
+    {
+        // Act
+        var act = () => _sut.GetAsync(_userId, new DateOnly(2026, 9, 1), new DateOnly(2026, 9, 30), trendFrom: new DateOnly(2026, 9, 2));
+
+        // Assert
+        await act.Should().ThrowAsync<ArgumentException>().WithParameterName("trendFrom");
+    }
+
     private void SetBudgets(params Budget[] budgets) =>
         _budgetRepository
             .ListByUserBetweenMonthsAsync(_userId, Arg.Any<YearMonth>(), Arg.Any<YearMonth>(), Arg.Any<CancellationToken>())
