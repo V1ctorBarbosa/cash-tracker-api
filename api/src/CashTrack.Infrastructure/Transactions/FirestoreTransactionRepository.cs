@@ -26,6 +26,9 @@ public sealed class FirestoreTransactionRepository : ITransactionRepository
     // Firestore rejects a single batched write with more than 500 operations.
     private const int MaxWritesPerBatch = 500;
 
+    // Firestore rejects a WhereIn filter with more than 30 values.
+    private const int MaxWhereInValues = 30;
+
     private readonly FirestoreDb _firestoreDb;
 
     public FirestoreTransactionRepository(FirestoreDb firestoreDb)
@@ -92,24 +95,27 @@ public sealed class FirestoreTransactionRepository : ITransactionRepository
         return TransactionDocumentMapper.ToDomain(transactionId, document);
     }
 
-    public async Task<bool> ExistsForRecurringTransactionAsync(
+    public async Task<IReadOnlySet<RecurringOccurrence>> ListMaterializedOccurrencesAsync(
         UserId userId,
-        RecurringTransactionId recurringTransactionId,
-        YearMonth month,
+        IReadOnlyCollection<RecurringTransactionId> recurringTransactionIds,
+        YearMonth fromMonth,
+        YearMonth toMonth,
         CancellationToken cancellationToken = default)
     {
-        var monthStart = new DateOnly(month.Year, month.Month, 1);
-        var monthEnd = new DateOnly(month.Year, month.Month, DateTime.DaysInMonth(month.Year, month.Month));
+        var chunkSnapshots = await Task.WhenAll(recurringTransactionIds
+            .Chunk(MaxWhereInValues)
+            .Select(recurringTransactionIdsChunk => QueryRecurringTransactionsInRangeAsync(
+                userId,
+                recurringTransactionIdsChunk,
+                fromMonth,
+                toMonth,
+                cancellationToken)));
 
-        var querySnapshot = await _firestoreDb.Collection(CollectionName)
-            .WhereEqualTo(UserIdFieldName, userId.Value)
-            .WhereEqualTo(RecurringTransactionIdFieldName, recurringTransactionId.Value)
-            .WhereGreaterThanOrEqualTo(DateFieldName, monthStart.ToString(DateFormat, CultureInfo.InvariantCulture))
-            .WhereLessThanOrEqualTo(DateFieldName, monthEnd.ToString(DateFormat, CultureInfo.InvariantCulture))
-            .Limit(1)
-            .GetSnapshotAsync(cancellationToken);
-
-        return querySnapshot.Count > 0;
+        return chunkSnapshots
+            .SelectMany(querySnapshot => querySnapshot.Documents)
+            .Select(document => TransactionDocumentMapper.ToRecurringOccurrence(document.ConvertTo<TransactionDocument>()))
+            .OfType<RecurringOccurrence>()
+            .ToHashSet();
     }
 
     public async Task SaveAsync(Transaction transaction, CancellationToken cancellationToken = default)
@@ -119,6 +125,20 @@ public sealed class FirestoreTransactionRepository : ITransactionRepository
         await _firestoreDb.Collection(CollectionName)
             .Document(transaction.Id.Value)
             .SetAsync(document, cancellationToken: cancellationToken);
+    }
+
+    public async Task SaveManyAsync(IReadOnlyCollection<Transaction> transactions, CancellationToken cancellationToken = default)
+    {
+        foreach (var transactionsChunk in transactions.Chunk(MaxWritesPerBatch))
+        {
+            var batch = _firestoreDb.StartBatch();
+            foreach (var transaction in transactionsChunk)
+            {
+                batch.Set(_firestoreDb.Collection(CollectionName).Document(transaction.Id.Value), TransactionDocumentMapper.ToDocument(transaction));
+            }
+
+            await batch.CommitAsync(cancellationToken);
+        }
     }
 
     public async Task DeleteAsync(UserId userId, TransactionId transactionId, CancellationToken cancellationToken = default)
@@ -141,4 +161,17 @@ public sealed class FirestoreTransactionRepository : ITransactionRepository
             await batch.CommitAsync(cancellationToken);
         }
     }
+
+    private Task<QuerySnapshot> QueryRecurringTransactionsInRangeAsync(
+        UserId userId,
+        IEnumerable<RecurringTransactionId> recurringTransactionIds,
+        YearMonth fromMonth,
+        YearMonth toMonth,
+        CancellationToken cancellationToken) =>
+        _firestoreDb.Collection(CollectionName)
+            .WhereEqualTo(UserIdFieldName, userId.Value)
+            .WhereIn(RecurringTransactionIdFieldName, recurringTransactionIds.Select(recurringTransactionId => recurringTransactionId.Value))
+            .WhereGreaterThanOrEqualTo(DateFieldName, fromMonth.FirstDay().ToString(DateFormat, CultureInfo.InvariantCulture))
+            .WhereLessThanOrEqualTo(DateFieldName, toMonth.LastDay().ToString(DateFormat, CultureInfo.InvariantCulture))
+            .GetSnapshotAsync(cancellationToken);
 }

@@ -55,6 +55,10 @@ public readonly record struct YearMonth : IComparable<YearMonth>
         return new YearMonth(totalMonths / MonthsPerYear, (totalMonths % MonthsPerYear) + 1);
     }
 
+    public DateOnly FirstDay() => new(Year, Month, 1);
+
+    public DateOnly LastDay() => new(Year, Month, DateTime.DaysInMonth(Year, Month));
+
     public int CompareTo(YearMonth other) => (Year, Month).CompareTo((other.Year, other.Month));
 
     public static bool operator <(YearMonth left, YearMonth right) => left.CompareTo(right) < 0;

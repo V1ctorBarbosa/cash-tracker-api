@@ -1,4 +1,5 @@
 using CashTrack.Domain.Common;
+using CashTrack.Domain.RecurringTransactions;
 using CashTrack.Domain.Tags;
 using CashTrack.Domain.Transactions;
 using CashTrack.Domain.Users;
@@ -90,5 +91,31 @@ public sealed class TransactionDocumentMapperTest
 
         // Assert
         document.Description.Should().BeNull();
+    }
+
+    [Fact]
+    public void ToRecurringOccurrence_ReturnsTheRecurringIdAndTheMonthOfTheTransactionDate()
+    {
+        // Arrange -- moved by the user from the generated day 5 to day 20; still September's occurrence.
+        var document = new TransactionDocument { Date = "2026-09-20", RecurringTransactionId = "recurring-1" };
+
+        // Act
+        var occurrence = TransactionDocumentMapper.ToRecurringOccurrence(document);
+
+        // Assert
+        occurrence.Should().Be(new RecurringOccurrence(new RecurringTransactionId("recurring-1"), new YearMonth(2026, 9)));
+    }
+
+    [Fact]
+    public void ToRecurringOccurrence_ReturnsNull_WhenTheTransactionIsNotRecurring()
+    {
+        // Arrange
+        var document = new TransactionDocument { Date = "2026-09-20", RecurringTransactionId = null };
+
+        // Act
+        var occurrence = TransactionDocumentMapper.ToRecurringOccurrence(document);
+
+        // Assert
+        occurrence.Should().BeNull();
     }
 }

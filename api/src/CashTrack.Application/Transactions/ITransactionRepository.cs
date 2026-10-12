@@ -11,14 +11,22 @@ public interface ITransactionRepository
 
     Task<Transaction?> GetByIdAsync(UserId userId, TransactionId transactionId, CancellationToken cancellationToken = default);
 
-    /// <summary>Whether a transaction already exists for this recurring definition in the given month (Section 12's generation guard).</summary>
-    Task<bool> ExistsForRecurringTransactionAsync(
+    /// <summary>
+    /// Which (recurring definition, month) pairs in [<paramref name="fromMonth"/>, <paramref name="toMonth"/>]
+    /// already have a transaction (Section 12's generation guard), answered for every given
+    /// definition at once so materialization costs a fixed number of round trips, not one per
+    /// recurrence per month.
+    /// </summary>
+    Task<IReadOnlySet<RecurringOccurrence>> ListMaterializedOccurrencesAsync(
         UserId userId,
-        RecurringTransactionId recurringTransactionId,
-        YearMonth month,
+        IReadOnlyCollection<RecurringTransactionId> recurringTransactionIds,
+        YearMonth fromMonth,
+        YearMonth toMonth,
         CancellationToken cancellationToken = default);
 
     Task SaveAsync(Transaction transaction, CancellationToken cancellationToken = default);
+
+    Task SaveManyAsync(IReadOnlyCollection<Transaction> transactions, CancellationToken cancellationToken = default);
 
     Task DeleteAsync(UserId userId, TransactionId transactionId, CancellationToken cancellationToken = default);
 
