@@ -122,6 +122,17 @@
           }
         },
         {
+          "name": "Get transaction statistics",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/transactions/statistics",
+              "host": ["{{baseUrl}}"],
+              "path": ["transactions", "statistics"]
+            }
+          }
+        },
+        {
           "name": "Get transaction",
           "request": {
             "method": "GET",
