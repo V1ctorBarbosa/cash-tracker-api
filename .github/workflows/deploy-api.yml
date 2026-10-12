@@ -30,11 +30,15 @@ jobs:
 
       - run: dotnet tool install -g Amazon.Lambda.Tools
 
+      # ReadyToRun ships the assemblies already compiled to native code for the Lambda's linux-x64
+      # runtime, so a cold start no longer waits on the JIT compiling everything the first request
+      # touches. It needs a runtime identifier, which `dotnet lambda package` passes to publish.
       - name: Package the Lambda function
         run: |
           dotnet lambda package \
             --project-location api/src/CashTrack.Api \
             --configuration Release \
+            --msbuild-parameters "-p:PublishReadyToRun=true" \
             --output-package "$LAMBDA_ZIP_PATH" \
             --disable-interactive true
 
